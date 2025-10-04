@@ -275,9 +275,9 @@ const GamesList = () => {
               </HStack>
               <Text mt={2} color="gray.700">{g.homeOrAway === 'home' ? 'Home' : 'Away'} fixture</Text>
               {canManage ? (
-                <HStack mt={3}>
+                <HStack mt={3} gap={2} wrap="wrap">
                   <Button
-                    size="sm"
+                    size={{ base: 'xs', sm: 'sm' }}
                     onClick={(e) => { e.preventDefault(); if (canSetResult) setResult(g.id, 'win') }}
                     disabled={!canSetResult}
                     title={canSetResult ? '' : 'Results can be set on or after match day'}
@@ -285,7 +285,7 @@ const GamesList = () => {
                     Mark Win
                   </Button>
                   <Button
-                    size="sm"
+                    size={{ base: 'xs', sm: 'sm' }}
                     variant="outline"
                     onClick={(e) => { e.preventDefault(); if (canSetResult) setResult(g.id, 'loss') }}
                     disabled={!canSetResult}
@@ -293,9 +293,9 @@ const GamesList = () => {
                   >
                     Mark Loss
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={(e) => { e.preventDefault(); openEdit(g) }}>Edit</Button>
+                  <Button size={{ base: 'xs', sm: 'sm' }} variant="ghost" onClick={(e) => { e.preventDefault(); openEdit(g) }}>Edit</Button>
                   <Button
-                    size="sm"
+                    size={{ base: 'xs', sm: 'sm' }}
                     colorScheme="red"
                     variant="outline"
                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteMatch(g.id) }}
