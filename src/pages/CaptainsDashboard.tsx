@@ -139,7 +139,6 @@ const CaptainsDashboard = () => {
   const unpaidSubs = useMemo(() => {
     const now = Date.now()
     const happened = (g: typeof games[number]) => g.result !== 'pending' || (g.matchDate ? g.matchDate.getTime() < now : false)
-    const entries: Array<{ pid: string; name: string; email?: string; gameId: string; opponent: string; date: Date | null; amount: number }>[] = [] as any
     const list: Array<{ pid: string; name: string; email?: string; gameId: string; opponent: string; date: Date | null; amount: number }> = []
     for (const g of games) {
       if (!happened(g)) continue
@@ -290,7 +289,17 @@ const CaptainsDashboard = () => {
                     <HStack>
                       <Text>£{e.amount.toFixed(2)}</Text>
                       {e.email ? (
-                        <Button as="a" href={`mailto:${encodeURIComponent(e.email)}?subject=${encodeURIComponent('Subs Due')}&body=${encodeURIComponent(`Hi ${e.name.split(' ')[0]},\n\nJust a reminder: your £2 subs for ${e.opponent} (${e.date ? e.date.toLocaleDateString() : 'recent match'}) are due next time you're in.\n\nThanks!`)}`} size="xs" variant="outline">Email</Button>
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          onClick={() => {
+                            const email = e.email || ''
+                            const mailto = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent('Subs Due')}&body=${encodeURIComponent(`Hi ${e.name.split(' ')[0]},\n\nJust a reminder: your £2 subs for ${e.opponent} (${e.date ? e.date.toLocaleDateString() : 'recent match'}) are due next time you're in.\n\nThanks!`)}`
+                            window.location.href = mailto
+                          }}
+                        >
+                          Email
+                        </Button>
                       ) : null}
                     </HStack>
                   </HStack>

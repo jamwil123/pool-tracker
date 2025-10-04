@@ -77,7 +77,6 @@ const GamesList = () => {
       location: g.location || '',
       homeOrAway: g.homeOrAway === 'away' ? 'away' : 'home',
     })
-    // @ts-expect-error notes might be null
     setEditingNotes((g as any).notes || '')
   }
 
@@ -314,9 +313,7 @@ const GamesList = () => {
                       </Box>
                     </HStack>
                     <HStack mt={3}>
-                      <Button type="submit" colorScheme="blue" isLoading={editingSaving} loadingText="Saving"
-                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); /* submit handled by form */ (e.currentTarget.closest('form') as HTMLFormElement)?.requestSubmit() }}
-                      >
+                      <Button type="submit" colorScheme="blue" loading={editingSaving} loadingText="Saving">
                         Save
                       </Button>
                       <Button
