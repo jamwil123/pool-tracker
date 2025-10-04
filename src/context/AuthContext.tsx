@@ -8,7 +8,8 @@ import {
 import type { User } from 'firebase/auth'
 import { collection, onSnapshot, query, where, limit } from 'firebase/firestore'
 import { auth, db } from '../firebase/config'
-import type { UserProfileDocument } from '../types/models'
+import type { UserProfileDocument, Role } from '../types/models'
+import { isRole } from '../types/models'
 
 type UserProfile = UserProfileDocument
 
@@ -18,6 +19,8 @@ type AuthContextValue = {
   loading: boolean
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
+  spoofRole: Role | null
+  setRoleSpoof: (role: Role | null) => void
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
@@ -26,6 +29,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [spoofRole, setSpoofRole] = useState<Role | null>(() => {
+    try {
+      // Only allow spoofing in dev/local environments
+      const dev = (import.meta as any).env?.DEV === true || typeof window !== 'undefined' && window.location?.hostname === 'localhost'
+      if (!dev) return null
+      const raw = typeof window !== 'undefined' ? window.localStorage.getItem('roleSpoof') : null
+      return isRole(raw) ? (raw as Role) : null
+    } catch { return null }
+  })
 
   useEffect(() => {
     let unsubscribeProfile: (() => void) | null = null
@@ -51,7 +63,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         (snapshot) => {
           if (!snapshot.empty) {
             const data = snapshot.docs[0].data() as UserProfile
-            setProfile(data)
+            setProfile(spoofRole ? { ...data, role: spoofRole } : data)
           } else {
             setProfile(null)
           }
@@ -81,6 +93,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await firebaseSignOut(auth)
   }
 
+  const setRoleSpoof = (role: Role | null) => {
+    try {
+      const dev = (import.meta as any).env?.DEV === true || typeof window !== 'undefined' && window.location?.hostname === 'localhost'
+      if (!dev) return
+      setSpoofRole(role)
+      if (typeof window !== 'undefined') {
+        if (role) window.localStorage.setItem('roleSpoof', role)
+        else window.localStorage.removeItem('roleSpoof')
+      }
+      setProfile((prev) => (prev ? ({ ...prev, role: role ?? prev.role }) : prev))
+    } catch {}
+  }
+
   const value = useMemo(
     () => ({
       user,
@@ -88,8 +113,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       loading,
       signIn: handleSignIn,
       signOut: handleSignOut,
+      spoofRole,
+      setRoleSpoof,
     }),
-    [user, profile, loading],
+    [user, profile, loading, spoofRole],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

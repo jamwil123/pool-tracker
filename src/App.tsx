@@ -9,11 +9,12 @@ const GamePage = lazy(() => import('./pages/GamePage'))
 const CaptainsDashboardLazy = lazy(() => import('./pages/CaptainsDashboard'))
 import { Box, Container, Flex, Heading, Text, Button, HStack } from '@chakra-ui/react'
 import { APP_TITLE, TEAM_NAME } from './config/app'
+import { ROLES, type Role } from './types/models'
 import ProfileSetup from './components/ProfileSetup'
 import { isManagerRole } from './types/models'
 
 const AppShell = () => {
-  const { user, profile, loading, signOut } = useAuth()
+  const { user, profile, loading, signOut, spoofRole, setRoleSpoof } = useAuth()
   const needsSetup = !profile || !profile.linkedRosterId || !profile.displayName || String(profile.displayName).trim().length === 0
 
   if (loading) {
@@ -72,7 +73,22 @@ const AppShell = () => {
                 <RouterLink to="/games">Matches</RouterLink>
                 {isManagerRole(profile.role) ? <RouterLink to="/dashboard">Captain's Dashboard</RouterLink> : null}
               </HStack>
-              <Button onClick={signOut} colorScheme="blue" variant="solid">Sign Out</Button>
+              <HStack gap={3}>
+                {(import.meta as any).env?.DEV ? (
+                  <select
+                    value={spoofRole ?? ''}
+                    onChange={(e) => setRoleSpoof((e.target.value as Role) || null)}
+                    style={{ padding: '6px 8px', borderRadius: 6 }}
+                    title="Role Spoof (local only)"
+                  >
+                    <option value="">Actual</option>
+                    {ROLES.map((r) => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
+                  </select>
+                ) : null}
+                <Button onClick={signOut} colorScheme="blue" variant="solid">Sign Out</Button>
+              </HStack>
             </Flex>
           </Box>
         </Box>

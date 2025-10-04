@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Timestamp, addDoc, collection, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc, getDocs, where } from 'firebase/firestore'
+import { Timestamp, addDoc, collection, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc, getDocs, where, deleteDoc } from 'firebase/firestore'
 import type { ChangeEvent, FormEvent } from 'react'
 import { Link as RouterLink } from 'react-router-dom'
 import { db } from '../firebase/config'
@@ -34,6 +34,7 @@ const GamesList = () => {
   const [editingState, setEditingState] = useState<MatchFormState>(defaultFormState)
   const [editingNotes, setEditingNotes] = useState<string>('')
   const [editingSaving, setEditingSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   
 
   const canManage = useMemo(() => !!profile && isManagerRole(profile.role), [profile])
@@ -108,6 +109,25 @@ const GamesList = () => {
       setError('Unable to save match changes.')
     } finally {
       setEditingSaving(false)
+    }
+  }
+
+  const deleteMatch = async (id: string) => {
+    if (!canManage) return
+    const g = games.find((x) => x.id === id)
+    const label = g ? `${g.opponent} (${g.matchDate ? g.matchDate.toDate().toLocaleDateString() : 'Date TBC'})` : id
+    const ok = window.confirm(`Delete match ${label}? This cannot be undone.`)
+    if (!ok) return
+    setDeletingId(id)
+    setError(null)
+    try {
+      await deleteDoc(doc(db, 'games', id))
+      if (editingId === id) cancelEdit()
+    } catch (err) {
+      console.error(err)
+      setError('Unable to delete this match. Please try again.')
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -274,6 +294,15 @@ const GamesList = () => {
                     Mark Loss
                   </Button>
                   <Button size="sm" variant="ghost" onClick={(e) => { e.preventDefault(); openEdit(g) }}>Edit</Button>
+                  <Button
+                    size="sm"
+                    colorScheme="red"
+                    variant="outline"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteMatch(g.id) }}
+                    loading={deletingId === g.id}
+                  >
+                    Delete
+                  </Button>
                 </HStack>
               ) : null}
 
