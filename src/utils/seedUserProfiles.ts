@@ -13,6 +13,7 @@ export type SeedOptions = {
   overwrite?: boolean
   linkUp?: boolean
   dryRun?: boolean
+  includeUnassigned?: boolean
 }
 
 export type SeedResult = {
@@ -39,8 +40,26 @@ export const seedUserProfiles = async (options: SeedOptions = {}): Promise<SeedR
   const overwrite = options.overwrite ?? false
   const linkUp = options.linkUp ?? true
   const dryRun = options.dryRun ?? false
+  const includeUnassigned = options.includeUnassigned ?? true
 
   const usersSnap = await getDocs(collection(db, 'users'))
+  const profilesSnap = await getDocs(collection(db, 'userProfiles'))
+
+  const normalize = (s: unknown) =>
+    (typeof s === 'string' ? s : '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+
+  const nameToProfileId = new Map<string, string>()
+  const uidToProfileId = new Map<string, string>()
+  for (const p of profilesSnap.docs) {
+    const data = p.data() as Partial<UserProfileDocument>
+    const key = normalize(data.displayName)
+    if (key && !nameToProfileId.has(key)) nameToProfileId.set(key, p.id)
+    const uid = typeof (data as any).uid === 'string' ? (data as any).uid : null
+    if (uid && !uidToProfileId.has(uid)) uidToProfileId.set(uid, p.id)
+  }
 
   let creates = 0
   let updates = 0
@@ -54,24 +73,32 @@ export const seedUserProfiles = async (options: SeedOptions = {}): Promise<SeedR
     const rosterId = docSnap.id
     const u = (docSnap.data() as Partial<RosterDocument>) || {}
     const assignedUid = typeof u.assignedUid === 'string' ? u.assignedUid.trim() : ''
+    const rosterName = trimName(u.displayName, rosterId)
+    const matchedByUid = assignedUid ? uidToProfileId.get(assignedUid) || null : null
+    const matchedProfileId = matchedByUid || nameToProfileId.get(normalize(rosterName)) || null
 
-    if (!assignedUid) {
+    const hasAssigned = Boolean(assignedUid)
+    if (!hasAssigned && !matchedProfileId && !includeUnassigned) {
       skipped++
       continue
     }
 
-    const profileRef = doc(db, 'userProfiles', assignedUid)
-    const existing = await getDoc(profileRef)
-
-    if (existing.exists() && !overwrite) {
-      skipped++
-      continue
+    // Determine target profile ref: existing match or a new auto-id doc
+    let profileRef = matchedProfileId ? doc(db, 'userProfiles', matchedProfileId) : doc(collection(db, 'userProfiles'))
+    const existing = matchedProfileId ? await getDoc(profileRef) : null
+    const isNameIdPlaceholder = matchedProfileId ? matchedProfileId === rosterId : false
+    let migratingToNew = false
+    if (existing && existing.exists() && isNameIdPlaceholder) {
+      // Migrate name-keyed placeholder to an auto-id doc
+      profileRef = doc(collection(db, 'userProfiles'))
+      migratingToNew = true
     }
+    const shouldWriteFull = migratingToNew || !existing || !existing.exists() || overwrite
 
     const playerSnap = await getDoc(doc(db, 'players', rosterId))
     const player = playerSnap.exists() ? (playerSnap.data() as PlayerDocument) : null
 
-    const displayName = trimName(u.displayName, rosterId)
+    const displayName = rosterName
     const role = ensureRole(u.role as Role)
     const totalWins = player?.wins ?? 0
     const totalLosses = player?.losses ?? 0
@@ -90,19 +117,39 @@ export const seedUserProfiles = async (options: SeedOptions = {}): Promise<SeedR
     }
 
     if (!dryRun) {
-      batch.set(profileRef, profileDoc, { merge: true })
-      ops++
-      if (existing.exists()) updates++
-      else creates++
+      if (shouldWriteFull) {
+        const withUid = hasAssigned ? { ...profileDoc, uid: assignedUid } : { ...profileDoc, uid: null }
+        batch.set(profileRef, withUid as any, { merge: true })
+        ops++
+        if (existing && existing.exists()) updates++
+        else creates++
+      } else {
+        // Only update link fields on existing profile when not overwriting
+        const minimal: Partial<UserProfileDocument> & { uid?: string | null } = {
+          linkedRosterId: rosterId,
+          linkedPlayerId: player ? rosterId : null,
+          updatedAt: serverTimestamp(),
+        }
+        if (hasAssigned) minimal.uid = assignedUid
+        batch.set(profileRef, minimal as any, { merge: true })
+        ops++
+        updates++
+      }
+      // If we migrated from an old placeholder doc id, delete it
+      if (migratingToNew && matchedProfileId) {
+        batch.delete(doc(db, 'userProfiles', matchedProfileId))
+        ops++
+      }
     }
 
-    if (linkUp && !dryRun) {
+    const linkTargetId = profileRef.id
+    if (linkUp && !dryRun && linkTargetId) {
       const rosterRef = doc(db, 'users', rosterId)
       batch.set(
         rosterRef,
         {
-          linkedProfileUid: assignedUid,
-          assignedUid,
+          linkedProfileUid: linkTargetId,
+          assignedUid: assignedUid || null,
           assignedEmail: (u as any).assignedEmail ?? null,
           assignedAt: (u as any).assignedAt ?? serverTimestamp(),
         },
@@ -114,7 +161,7 @@ export const seedUserProfiles = async (options: SeedOptions = {}): Promise<SeedR
         const playerRef = doc(db, 'players', rosterId)
         batch.set(
           playerRef,
-          { linkedProfileUid: assignedUid, updatedAt: serverTimestamp(), subsStatus: player?.subsStatus ?? 'due' },
+          { linkedProfileUid: linkTargetId, updatedAt: serverTimestamp(), subsStatus: player?.subsStatus ?? 'due' },
           { merge: true },
         )
         ops++
@@ -137,4 +184,3 @@ export const seedUserProfiles = async (options: SeedOptions = {}): Promise<SeedR
 }
 
 export default seedUserProfiles
-

@@ -12,6 +12,8 @@ import {
   runTransaction,
   serverTimestamp,
   updateDoc,
+  where,
+  limit,
 } from "firebase/firestore";
 import { db } from "../firebase/config";
 import { useAuth } from "../context/AuthContext";
@@ -198,22 +200,17 @@ const SeasonManager = () => {
     return () => unsubscribe();
   }, []);
 
-  // NEW: subscribe to logged-in user's userProfiles/{uid} to show wins/losses
+  // NEW: subscribe to logged-in user's profile by uid field (auto-id docs)
   useEffect(() => {
     const uid = resolveUid(profile);
     if (!uid) return;
-    const ref = doc(db, "userProfiles", uid);
-    const unsub = onSnapshot(
-      ref,
-      (snap) => {
-        setMyProfile(
-          snap.exists() ? (snap.data() as UserProfileDocument) : null
-        );
-      },
-      (err) => {
-        console.error("Failed to load user profile", err);
-      }
-    );
+    const q = query(collection(db, 'userProfiles'), where('uid', '==', uid), limit(1))
+    const unsub = onSnapshot(q, (snap) => {
+      if (!snap.empty) setMyProfile(snap.docs[0].data() as UserProfileDocument)
+      else setMyProfile(null)
+    }, (err) => {
+      console.error("Failed to load user profile", err);
+    })
     return () => unsub();
   }, [profile]);
 
@@ -540,9 +537,11 @@ const SeasonManager = () => {
           new Set(stats.map((stat) => stat.displayName))
         );
 
+        const uniquePlayerIds = Array.from(new Set(stats.map((s) => s.playerId)))
         transaction.update(gameRef, {
           playerStats: stats,
           players: uniquePlayers,
+          playerIds: uniquePlayerIds,
           updatedAt: serverTimestamp(),
         });
       });
@@ -567,6 +566,9 @@ const SeasonManager = () => {
   return (
     <section className="panel">
       <header>
+        {profile?.displayName ? (
+          <h2>Welcome, {profile.displayName}</h2>
+        ) : null}
         <h2>Season Matches</h2>
         <p>Keep track of upcoming fixtures and past results.</p>
       </header>

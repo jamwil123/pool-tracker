@@ -1,12 +1,16 @@
 import './App.css'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import LoginForm from './components/LoginForm'
-import SeasonManager from './components/SeasonManager'
-import PlayerStats from './components/PlayerStats'
+import { BrowserRouter, Link as RouterLink, Route, Routes, Navigate } from 'react-router-dom'
+import Home from './pages/Home'
+import GamesList from './pages/GamesList'
+import GamePage from './pages/GamePage'
+import { Box, Container, Flex, Heading, Text, Button, HStack } from '@chakra-ui/react'
 import ProfileSetup from './components/ProfileSetup'
 
 const AppShell = () => {
   const { user, profile, loading, signOut } = useAuth()
+  const needsSetup = !profile || !profile.linkedRosterId || !profile.displayName || String(profile.displayName).trim().length === 0
 
   if (loading) {
     return (
@@ -24,28 +28,56 @@ const AppShell = () => {
     )
   }
 
-  if (!profile) {
-    return <ProfileSetup />
+  if (needsSetup) {
+    return (
+      <BrowserRouter>
+        <Container maxW="6xl" py={8}>
+          <Box className="app-header" as="header" p={6} borderRadius="lg" boxShadow="md" bg="white">
+            <Flex align="center" justify="space-between" gap={6} wrap="wrap">
+              <Box>
+                <Heading size="lg">Pool Season Tracker</Heading>
+                <Text mt={1}>Signed in as {user.email} · Complete setup</Text>
+              </Box>
+              <Button onClick={signOut} colorScheme="blue" variant="solid">Sign Out</Button>
+            </Flex>
+          </Box>
+          <Box mt={6}>
+            <Routes>
+              <Route path="/setup" element={<ProfileSetup />} />
+              <Route path="*" element={<Navigate to="/setup" replace />} />
+            </Routes>
+          </Box>
+        </Container>
+      </BrowserRouter>
+    )
   }
 
   return (
-    <main className="container">
-      <header className="app-header">
-        <div>
-          <h1>Pool Season Tracker</h1>
-          <p>
-            Signed in as {user.email} · Role: {profile.role}
-          </p>
-        </div>
-        <button type="button" onClick={signOut}>
-          Sign Out
-        </button>
-      </header>
-      <section className="panels">
-        <SeasonManager />
-        <PlayerStats />
-      </section>
-    </main>
+    <BrowserRouter>
+      <Container maxW="6xl" py={8}>
+        <Box className="app-header" as="header" p={6} borderRadius="lg" boxShadow="md" bg="white">
+          <Flex align="center" justify="space-between" gap={6} wrap="wrap">
+            <Box>
+              <Heading size="lg">Pool Season Tracker</Heading>
+              <Text mt={1}>Signed in as {user.email} · Role: {profile.role}</Text>
+              <HStack gap={4} mt={2} as="nav">
+                <RouterLink to="/">Home</RouterLink>
+                <RouterLink to="/games">Matches</RouterLink>
+              </HStack>
+            </Box>
+            <Button onClick={signOut} colorScheme="blue" variant="solid">Sign Out</Button>
+          </Flex>
+        </Box>
+        <Box mt={6}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/games" element={<GamesList />} />
+            <Route path="/games/:id" element={<GamePage />} />
+            <Route path="/setup" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Box>
+      </Container>
+    </BrowserRouter>
   )
 }
 

@@ -5,6 +5,7 @@ export type Role = 'captain' | 'viceCaptain' | 'player'
 export type UserProfileDocument = {
   displayName: string
   role: Role
+  uid?: string | null
   linkedRosterId: string
   linkedPlayerId: string | null
   totalWins: number
@@ -42,6 +43,7 @@ export type SeasonGamePlayerStat = {
   singlesLosses: number
   doublesWins: number
   doublesLosses: number
+  subsPaid?: boolean
 }
 
 export type SeasonGameDocument = {

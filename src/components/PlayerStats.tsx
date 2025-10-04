@@ -10,6 +10,8 @@ import {
   runTransaction,
   serverTimestamp,
   updateDoc,
+  where,
+  limit,
 } from "firebase/firestore";
 import {
   Bar,
@@ -22,6 +24,7 @@ import {
 } from "recharts";
 import { db } from "../firebase/config";
 import { useAuth } from "../context/AuthContext";
+import { Box, Heading, Text, Button, Input } from '@chakra-ui/react'
 import type { PlayerDocument, Role, RosterDocument } from "../types/models";
 
 type PlayerRecord = PlayerDocument & { id: string };
@@ -44,15 +47,7 @@ const defaultPlayerForm: PlayerFormState = {
   role: "player",
 };
 
-const createPlayerSkeleton = (displayName: string): PlayerDocument => ({
-  displayName,
-  wins: 0,
-  losses: 0,
-  subsStatus: "due",
-  createdAt: serverTimestamp(),
-  updatedAt: serverTimestamp(),
-  linkedProfileUid: null,
-});
+// legacy helper no longer used; stats are tracked on userProfiles
 
 const createRosterSkeleton = (
   displayName: string,
@@ -121,21 +116,18 @@ const PlayerStats = () => {
     return () => unsubscribe();
   }, []);
 
-  // NEW: subscribe to the logged-in user's userProfiles/{uid}
+  // NEW: subscribe to the logged-in user's profile by uid field (auto-id docs)
   useEffect(() => {
     const uid = resolveUid(profile);
     if (!uid) return;
 
-    const ref = doc(db, "userProfiles", uid);
-    const unsub = onSnapshot(
-      ref,
-      (snap) => {
-        setMyProfile(snap.exists() ? (snap.data() as UserProfile) : null);
-      },
-      (err) => {
-        console.error("Failed to load user profile", err);
-      }
-    );
+    const q = query(collection(db, 'userProfiles'), where('uid', '==', uid), limit(1))
+    const unsub = onSnapshot(q, (snap) => {
+      if (!snap.empty) setMyProfile(snap.docs[0].data() as UserProfile)
+      else setMyProfile(null)
+    }, (err) => {
+      console.error("Failed to load user profile", err);
+    })
     return () => unsub();
   }, [profile]);
 
@@ -160,24 +152,12 @@ const PlayerStats = () => {
     try {
       await runTransaction(db, async (transaction) => {
         const rosterRef = doc(db, "users", trimmedName);
-        const playerRef = doc(db, "players", trimmedName);
-
         const rosterSnapshot = await transaction.get(rosterRef);
-        const playerSnapshot = await transaction.get(playerRef);
-
         if (rosterSnapshot.exists()) {
           throw new Error(
             "A roster entry with that name already exists. Choose a different name."
           );
         }
-
-        if (playerSnapshot.exists()) {
-          throw new Error(
-            "A player record with that name already exists. Choose a different name."
-          );
-        }
-
-        transaction.set(playerRef, createPlayerSkeleton(trimmedName));
         transaction.set(
           rosterRef,
           createRosterSkeleton(trimmedName, formState.role)
@@ -291,15 +271,13 @@ const PlayerStats = () => {
 
       {/* Optional: show a small card with the user's own numbers */}
       {myProfile && (
-        <div className="card">
-          <h3>My Stats</h3>
-          <p>
-            {myProfile.displayName ?? "Me"} — {myWins} wins · {myLosses} losses
-          </p>
-          <span className={`tag subs-${myProfile.subsStatus ?? "due"}`}>
+        <Box className="card">
+          <Heading as="h3" size="sm">My Stats</Heading>
+          <Text mt={1}>{myProfile.displayName ?? "Me"} — {myWins} wins · {myLosses} losses</Text>
+          <span className={`tag ${myProfile.subsStatus === 'paid' ? 'subs-paid' : 'subs-due'}`}>
             Subs {myProfile.subsStatus === "paid" ? "paid" : "due"}
           </span>
-        </div>
+        </Box>
       )}
 
       <div className="card">
@@ -327,55 +305,30 @@ const PlayerStats = () => {
 
       {/* Keep admin features and full list below */}
       {canManagePlayers ? (
-        <div className="card">
-          <header className="card-header">
-            <h3>Add Player</h3>
-            <button type="button" onClick={() => setShowForm((prev) => !prev)}>
+        <Box className="card">
+          <Box className="card-header">
+            <Heading as="h3" size="sm">Add Player</Heading>
+            <Button size="sm" onClick={() => setShowForm((prev) => !prev)}>
               {showForm ? "Close Form" : "New Player"}
-            </button>
-          </header>
+            </Button>
+          </Box>
           {showForm ? (
             <form className="form-inline" onSubmit={handleAddPlayer}>
-              <label htmlFor="displayName">Name</label>
-              <input
-                id="displayName"
-                type="text"
-                value={formState.displayName}
-                onChange={(event) =>
-                  setFormState((prev) => ({
-                    ...prev,
-                    displayName: event.target.value,
-                  }))
-                }
-                required
-              />
-              <label htmlFor="role">Role</label>
-              <select
-                id="role"
-                value={formState.role}
-                onChange={(event) =>
-                  setFormState((prev) => ({
-                    ...prev,
-                    role: event.target.value as Role,
-                  }))
-                }
-              >
+              <Text fontSize="sm">Name</Text>
+              <Input id="displayName" value={formState.displayName} onChange={(e) => setFormState((p) => ({ ...p, displayName: e.target.value }))} required />
+              <Text fontSize="sm">Role</Text>
+              <select id="role" value={formState.role} onChange={(e) => setFormState((p) => ({ ...p, role: e.target.value as Role }))}>
                 <option value="player">Player</option>
                 <option value="viceCaptain">Vice Captain</option>
                 <option value="captain">Captain</option>
               </select>
-              <p className="hint">
-                Creates a roster entry in <code>users</code> and a stats record
-                in <code>players</code> with default values.
-              </p>
-              <button type="submit" disabled={submitting}>
-                {submitting ? "Adding…" : "Add Player"}
-              </button>
+              <Text className="hint">Creates a roster entry in users.</Text>
+              <Button type="submit" loading={submitting}>Add Player</Button>
             </form>
           ) : (
-            <p className="hint">Use the button to add a new squad member.</p>
+            <Text className="hint">Use the button to add a new squad member.</Text>
           )}
-        </div>
+        </Box>
       ) : (
         <p className="hint">
           Only the captain or vice captain can add or update players.

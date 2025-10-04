@@ -258,6 +258,69 @@
   box-shadow: none;
 }
 
+/* Home hero and stats */
+.hero {
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 1.75rem;
+  box-shadow: 0 18px 40px rgba(14, 26, 60, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+.hero-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.badge {
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: #e2e8f0;
+  color: #0f172a;
+}
+.badge.role-captain { background: rgba(34,197,94,.15); color: #166534; }
+.badge.role-viceCaptain { background: rgba(59,130,246,.15); color: #1d4ed8; }
+.badge.role-player { background: rgba(148,163,184,.2); color: #334155; }
+
+.stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+.stat-card {
+  min-width: 120px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 0.9rem 1rem;
+}
+.stat-label { font-size: .8rem; color: #64748b; }
+.stat-value { font-size: 1.4rem; font-weight: 700; }
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+.nav-card {
+  display: block;
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 1.25rem 1.4rem;
+  box-shadow: 0 16px 36px rgba(14,26,60,.06);
+  text-decoration: none;
+  color: inherit;
+  border: 1px solid #e2e8f0;
+}
+.nav-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 22px 44px rgba(14,26,60,.08);
+}
+
 .player-stats-summary {
   display: grid;
   gap: 0.75rem;
@@ -270,6 +333,7 @@
   padding: 0.75rem 1rem;
   border-radius: 14px;
   background: #e2e8f0;
+  border: 1px solid #cbd5e1; /* subtle border to delineate each item */
   align-items: center;
 }
 
@@ -308,9 +372,97 @@
   font-size: 0.85rem;
   font-weight: 600;
   color: #475569;
+  /* Add a card-like border around each input group */
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.6rem 0.75rem;
+  background: #ffffff;
 }
 
 .player-result-row select,
 .player-result-row input {
   width: 100%;
+}
+
+/* Tighter look for number inputs inside bordered cells */
+.player-result-row input[type="number"],
+.player-result-row select {
+  background-color: #f8fafc;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  padding: 0.45rem 0.55rem;
+}
+
+/* Responsive card grid for game page content */
+.cards-responsive {
+  display: grid;
+  gap: 1.25rem;
+  align-items: stretch;
+  grid-template-columns: 1fr; /* mobile */
+}
+
+@media (min-width: 768px) {
+  .cards-responsive {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Modal styles */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 50;
+}
+.modal {
+  width: 100%;
+  max-width: 920px;
+}
+.modal-card {
+  max-height: 85vh;
+  overflow: auto;
+}
+
+@media (min-width: 1024px) {
+  .cards-responsive {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Force two even columns for specific grids (e.g., Game page) */
+.cards-2col {
+  grid-template-columns: 1fr;
+}
+@media (min-width: 768px) {
+  .cards-2col {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1024px) {
+  .cards-2col {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Make game-page cards larger and evenly sized */
+.cards-responsive > .card {
+  min-height: 260px;
+  padding: 2rem; /* bump up padding for a bigger feel */
+  height: 100%;
+}
+
+/* Make a section span the full viewport width even inside a centered container */
+.full-bleed {
+  width: 100vw;
+  position: relative;
+  left: 50%;
+  right: 50%;
+  margin-left: -50vw;
+  margin-right: -50vw;
+  padding-left: 1rem;
+  padding-right: 1rem;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { collection, doc, onSnapshot, runTransaction, serverTimestamp } from 'firebase/firestore'
+import { collection, doc, onSnapshot, runTransaction, serverTimestamp, query, where, getDocs, writeBatch } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuth } from '../context/AuthContext'
 import type { PlayerDocument, Role, RosterDocument, UserProfileDocument } from '../types/models'
@@ -40,9 +40,11 @@ const normaliseDisplayName = (value: string, fallback: string) => {
 const createProfileDocument = (
   entry: RosterEntry,
   player: PlayerEntry | null,
+  uid: string,
 ): UserProfileDocument => ({
   displayName: entry.displayName,
   role: entry.role,
+  uid,
   linkedRosterId: entry.id,
   linkedPlayerId: player ? player.id : null,
   totalWins: player?.wins ?? 0,
@@ -120,7 +122,8 @@ const ProfileSetup = () => {
 
     try {
       const rosterRef = doc(db, 'users', selectedRosterId)
-      const profileRef = doc(db, 'userProfiles', user.uid)
+      const profileRef = doc(collection(db, 'userProfiles'))
+      const newProfileId = profileRef.id
       const playerRef = doc(db, 'players', selectedRosterId)
 
       await runTransaction(db, async (transaction) => {
@@ -153,23 +156,38 @@ const ProfileSetup = () => {
           throw new Error('That player is already linked to another account.')
         }
 
-        transaction.set(profileRef, createProfileDocument(entry, playerEntry))
+        transaction.set(profileRef, createProfileDocument(entry, playerEntry, user.uid))
 
         transaction.update(rosterRef, {
           assignedUid: user.uid,
           assignedEmail: user.email ?? null,
           assignedAt: serverTimestamp(),
-          linkedProfileUid: user.uid,
+          linkedProfileUid: newProfileId,
         })
 
         if (playerEntry) {
           transaction.update(playerRef, {
-            linkedProfileUid: user.uid,
+            linkedProfileUid: newProfileId,
             updatedAt: serverTimestamp(),
             subsStatus: playerEntry.subsStatus ?? 'due',
           })
         }
       })
+
+      // Clean up any placeholder profiles previously created for this roster entry
+      const q = query(collection(db, 'userProfiles'), where('linkedRosterId', '==', selectedRosterId))
+      const snap = await getDocs(q)
+      if (!snap.empty) {
+        const batch = writeBatch(db)
+        for (const d of snap.docs) {
+          const data = d.data() as Partial<UserProfileDocument>
+          const hasUid = typeof data.uid === 'string' && data.uid
+          if (!hasUid || d.id === selectedRosterId) {
+            batch.delete(d.ref)
+          }
+        }
+        await batch.commit()
+      }
 
       setState((prev) => ({ ...prev, selectedId: '' }))
     } catch (assignError) {

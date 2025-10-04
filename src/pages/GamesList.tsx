@@ -3,7 +3,6 @@ import { Timestamp, addDoc, collection, doc, onSnapshot, orderBy, query, serverT
 import type { ChangeEvent, FormEvent } from 'react'
 import { Link as RouterLink } from 'react-router-dom'
 import { db } from '../firebase/config'
-import { seedUserProfiles } from '../utils/seedUserProfiles'
 import { useAuth } from '../context/AuthContext'
 import type { SeasonGameDocument } from '../types/models'
 import { Box, Heading, Text, HStack, Button, SimpleGrid, Input } from '@chakra-ui/react'
@@ -29,8 +28,7 @@ const GamesList = () => {
   const [showForm, setShowForm] = useState(false)
   const [formState, setFormState] = useState<MatchFormState>(defaultFormState)
   const [submitting, setSubmitting] = useState(false)
-  const [seeding, setSeeding] = useState(false)
-  const [seedSummary, setSeedSummary] = useState<string | null>(null)
+  
 
   const canManage = useMemo(() => !!profile && (profile.role === 'captain' || profile.role === 'viceCaptain'), [profile])
 
@@ -93,25 +91,14 @@ const GamesList = () => {
     }
   }
 
-  const handleSeedProfiles = async () => {
-    if (!canManage || seeding) return
-    setSeeding(true)
-    setSeedSummary(null)
-    setError(null)
-    try {
-      const result = await seedUserProfiles({ overwrite: false, linkUp: true, dryRun: false })
-      setSeedSummary(`Seed complete. Created: ${result.creates}, updated: ${result.updates}, linked: ${result.linked}, skipped: ${result.skipped}`)
-    } catch (e) {
-      console.error('Seeding user profiles failed', e)
-      setError('Failed to seed user profiles. Check permissions and try again.')
-    } finally {
-      setSeeding(false)
-    }
-  }
+  
 
   return (
     <Box>
       <Box as="header" mb={4}>
+        {profile?.displayName ? (
+          <Heading size="lg" mb={1}>Welcome, {profile.displayName}</Heading>
+        ) : null}
         <Heading size="md">Season Matches</Heading>
         <Text color="gray.600">Browse fixtures and open a match to manage results.</Text>
       </Box>
@@ -145,14 +132,6 @@ const GamesList = () => {
         ) : null}
       </HStack>
       {error ? <Box className="error" mb={3}>{error}</Box> : null}
-      {canManage ? (
-        <Box borderWidth="1px" borderRadius="lg" p={4} bg="white" mb={4}>
-          <Heading as="h3" size="sm" mb={2}>Captain Tools</Heading>
-          <Text fontSize="sm" color="gray.700" mb={2}>Seed userProfiles from the users collection.</Text>
-          {seedSummary ? <Text fontSize="sm" color="gray.600" mb={2}>{seedSummary}</Text> : null}
-          <Button size="sm" onClick={handleSeedProfiles} isLoading={seeding} loadingText="Seeding…" colorScheme="blue">Seed User Profiles</Button>
-        </Box>
-      ) : null}
       {canManage && showForm ? (
         <Box borderWidth="1px" borderRadius="lg" p={4} bg="white" mb={4}>
           <form onSubmit={create}>

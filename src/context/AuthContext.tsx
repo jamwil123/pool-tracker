@@ -6,7 +6,7 @@ import {
   signOut as firebaseSignOut,
 } from 'firebase/auth'
 import type { User } from 'firebase/auth'
-import { doc, onSnapshot } from 'firebase/firestore'
+import { collection, doc, onSnapshot, query, where, limit } from 'firebase/firestore'
 import { auth, db } from '../firebase/config'
 import type { UserProfileDocument } from '../types/models'
 
@@ -45,12 +45,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
 
       setLoading(true)
-      const profileRef = doc(db, 'userProfiles', authUser.uid)
+      const q = query(collection(db, 'userProfiles'), where('uid', '==', authUser.uid), limit(1))
       unsubscribeProfile = onSnapshot(
-        profileRef,
+        q,
         (snapshot) => {
-          if (snapshot.exists()) {
-            const data = snapshot.data() as UserProfile
+          if (!snapshot.empty) {
+            const data = snapshot.docs[0].data() as UserProfile
             setProfile(data)
           } else {
             setProfile(null)
