@@ -14,18 +14,7 @@ export type UserTotals = {
   subsDueGames: DueGame[]
 }
 
-const sumFromStats = (stats: SeasonGamePlayerStat[] | undefined, uid: string) => {
-  if (!Array.isArray(stats) || !uid) return { wins: 0, losses: 0 }
-  let wins = 0
-  let losses = 0
-  for (const s of stats) {
-    if (s && s.playerId === uid) {
-      wins += (Number(s.singlesWins) || 0) + (Number(s.doublesWins) || 0)
-      losses += (Number(s.singlesLosses) || 0) + (Number(s.doublesLosses) || 0)
-    }
-  }
-  return { wins, losses }
-}
+// removed unused helper
 
 export const useUserTotals = (uid: string): UserTotals => {
   const [loading, setLoading] = useState(true)

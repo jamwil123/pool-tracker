@@ -2,9 +2,10 @@ import './App.css'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import LoginForm from './components/LoginForm'
 import { BrowserRouter, Link as RouterLink, Route, Routes, Navigate } from 'react-router-dom'
-import Home from './pages/Home'
-import GamesList from './pages/GamesList'
-import GamePage from './pages/GamePage'
+import { lazy, Suspense } from 'react'
+const Home = lazy(() => import('./pages/Home'))
+const GamesList = lazy(() => import('./pages/GamesList'))
+const GamePage = lazy(() => import('./pages/GamePage'))
 import { Box, Container, Flex, Heading, Text, Button, HStack } from '@chakra-ui/react'
 import ProfileSetup from './components/ProfileSetup'
 
@@ -69,12 +70,14 @@ const AppShell = () => {
           </Flex>
         </Box>
         <Box mt={6}>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/games" element={<GamesList />} />
-            <Route path="/games/:id" element={<GamePage />} />
-            <Route path="/setup" element={<Navigate to="/" replace />} />
-          </Routes>
+          <Suspense fallback={<div>Loading…</div>}>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/games" element={<GamesList />} />
+              <Route path="/games/:id" element={<GamePage />} />
+              <Route path="/setup" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
         </Box>
       </Container>
     </BrowserRouter>

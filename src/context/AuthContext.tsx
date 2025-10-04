@@ -6,7 +6,7 @@ import {
   signOut as firebaseSignOut,
 } from 'firebase/auth'
 import type { User } from 'firebase/auth'
-import { collection, doc, onSnapshot, query, where, limit } from 'firebase/firestore'
+import { collection, onSnapshot, query, where, limit } from 'firebase/firestore'
 import { auth, db } from '../firebase/config'
 import type { UserProfileDocument } from '../types/models'
 
