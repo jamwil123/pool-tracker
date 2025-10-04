@@ -8,9 +8,9 @@ export default defineConfig({
     proxy: {
       // Dev-only proxy to bypass CORS locally
       '/api/standings': {
-        target: 'https://scrapecleaguetable-wbv6pvivda-nw.a.run.app/',
+        target: 'https://europe-west2-pool-league-74bf5.cloudfunctions.net',
         changeOrigin: true,
-        rewrite: (path) => '/',
+        rewrite: () => '/scrapeCLeagueTable',
       },
     },
   },

@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { STANDINGS_API_URL } from '../config/app'
-import { SAMPLE_STANDINGS } from '../config/sampleStandings'
 
 export type StandingRow = {
   position: string
@@ -29,7 +28,7 @@ export const useStandings = () => {
   const [errorDetail, setErrorDetail] = useState<string | null>(null)
   const [data, setData] = useState<StandingsPayload | null>(null)
   const [lastUrl, setLastUrl] = useState<string | null>(null)
-  const [isFallback, setIsFallback] = useState<boolean>(false)
+  // no artificial delay; show data as soon as it arrives
 
   const load = async (signal?: AbortSignal) => {
     setLoading(true)
@@ -50,16 +49,35 @@ export const useStandings = () => {
       urls.push(base.replace(/\/$/, '') + '/standings')
     }
 
-    let lastErr: any = null
+    let lastErrMessage: string | null = null
     for (const url of urls) {
       try {
         const res = await fetch(url, { signal, headers: { Accept: 'application/json' } as any })
         setLastUrl(url)
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         // Try parsing JSON; if content-type is not JSON but body is JSON, still parse
+        const ct = res.headers.get('content-type') || ''
+        console.log('[standings] fetch ok', { url, status: res.status, contentType: ct })
         const text = await res.text()
-        const json = JSON.parse(text) as StandingsPayload
-        const rows = (json.standings || []).map((r, i) => {
+        try {
+          console.log('[standings] raw body first 400 chars:', text.slice(0, 400))
+        } catch {}
+        let parsed: any
+        try {
+          parsed = JSON.parse(text)
+        } catch {
+          throw new Error('Invalid JSON')
+        }
+        // Handle possible wrappers: { data: {...} } or { result: {...} }
+        let payload: any = parsed
+        if (Array.isArray(parsed)) {
+          payload = { standings: parsed }
+        }
+        if (!Array.isArray(payload?.standings)) {
+          if (Array.isArray(payload?.data?.standings)) payload = payload.data
+          else if (Array.isArray(payload?.result?.standings)) payload = payload.result
+        }
+        const rows = (payload.standings || []).map((r: any, i: number) => {
           const gf = Number(r.gf || (r.raw?.[6] ?? 0))
           const ga = Number(r.ga || (r.raw?.[7] ?? 0))
           const gdStr = (r.gd ?? '').toString().trim()
@@ -67,42 +85,38 @@ export const useStandings = () => {
           const position = (r.position ?? '').toString().trim() || (r.raw?.[0] ?? String(i + 1))
           return { ...r, gd, position }
         })
-        setData({ ...json, standings: rows })
-        setIsFallback(false)
+        const normalized: StandingsPayload = {
+          division: String(payload.division ?? ''),
+          scrapedAt: String(payload.scrapedAt ?? new Date().toISOString()),
+          source: String(payload.source ?? ''),
+          standings: rows,
+        }
+        console.log('[standings] parsed rows:', rows.length)
+        setData(normalized)
         setLoading(false)
         return
       } catch (e: any) {
-        lastErr = e
+        lastErrMessage = e?.message || String(e)
+        console.warn('[standings] fetch/parse failed for', url, lastErrMessage)
         continue
       }
     }
-    // Fallback to sample so the UI still renders data
-    const rows = (SAMPLE_STANDINGS.standings || []).map((r, i) => {
-      const gf = Number(r.gf || (r.raw?.[6] ?? 0))
-      const ga = Number(r.ga || (r.raw?.[7] ?? 0))
-      const gdStr = (r.gd ?? '').toString().trim()
-      const gd = gdStr.length ? gdStr : String(gf - ga)
-      const position = (r.position ?? '').toString().trim() || (r.raw?.[0] ?? String(i + 1))
-      return { ...r, gd, position }
-    })
-    setData({ ...SAMPLE_STANDINGS, standings: rows })
-    setIsFallback(true)
-    setError(null)
-    setErrorDetail(null)
+    setData(null)
+    setError('Failed to load standings')
+    setErrorDetail(`${lastErrMessage || ''}${lastUrl ? ` from ${lastUrl}` : ''}`.trim())
     setLoading(false)
   }
 
   useEffect(() => {
-    let alive = true
     const ac = new AbortController()
     load(ac.signal)
-    return () => { alive = false; ac.abort() }
+    return () => { ac.abort() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const reload = () => load()
 
-  return { loading, error, errorDetail, data, reload, isFallback, usedUrl: lastUrl }
+  return { loading, error, errorDetail, data, reload, usedUrl: lastUrl }
 }
 
 export default useStandings

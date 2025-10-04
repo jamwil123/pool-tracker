@@ -1,7 +1,7 @@
 import { useAuth } from '../context/AuthContext'
 import { useState } from 'react'
 import useUserTotals from '../hooks/useUserTotals'
-import { Box, Heading, Text, HStack, SimpleGrid, Button, Stack } from '@chakra-ui/react'
+import { Box, Heading, Text, HStack, SimpleGrid, Button, Stack, Spinner, Center } from '@chakra-ui/react'
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts'
 import { Link as RouterLink } from 'react-router-dom'
 import { TEAM_NAME } from '../config/app'
@@ -117,55 +117,88 @@ const Home = () => {
           <Heading as="h3" size="md">League Standings</Heading>
           {standings.data?.division ? <Text color="gray.600">{standings.data.division}</Text> : null}
         </HStack>
-        {standings.error ? (
-          <Text color="red.600">Failed to load standings. Please try again later.</Text>
-        ) : (
-          <Box overflowX="auto">
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'left', padding: '6px' }}>Pos</th>
-                  <th style={{ textAlign: 'left', padding: '6px' }}>Team</th>
-                  <th style={{ textAlign: 'right', padding: '6px' }}>P</th>
-                  <th style={{ textAlign: 'right', padding: '6px' }}>W</th>
-                  <th style={{ textAlign: 'right', padding: '6px' }}>D</th>
-                  <th style={{ textAlign: 'right', padding: '6px' }}>L</th>
-                  <th style={{ textAlign: 'right', padding: '6px' }}>GF</th>
-                  <th style={{ textAlign: 'right', padding: '6px' }}>GA</th>
-                  <th style={{ textAlign: 'right', padding: '6px' }}>GD</th>
-                  <th style={{ textAlign: 'right', padding: '6px' }}>Pts</th>
-                </tr>
-              </thead>
-              <tbody>
+        {standings.data ? (
+          <>
+            {/* Mobile compact list */}
+            <Box display={{ base: 'block', sm: 'none' }}>
+              <Stack gap={2}>
                 {(standings.data?.standings || []).map((row) => (
-                  <tr key={row.team} style={{ background: row.team === TEAM_NAME ? 'rgba(59,130,246,.08)' : 'transparent' }}>
-                    <td style={{ padding: '6px' }}>{row.position || ''}</td>
-                    <td style={{ padding: '6px', fontWeight: row.team === TEAM_NAME ? 600 : 400 }}>{row.team}</td>
-                    <td style={{ padding: '6px', textAlign: 'right' }}>{row.played}</td>
-                    <td style={{ padding: '6px', textAlign: 'right' }}>{row.won}</td>
-                    <td style={{ padding: '6px', textAlign: 'right' }}>{row.drawn}</td>
-                    <td style={{ padding: '6px', textAlign: 'right' }}>{row.lost}</td>
-                    <td style={{ padding: '6px', textAlign: 'right' }}>{row.gf}</td>
-                    <td style={{ padding: '6px', textAlign: 'right' }}>{row.ga}</td>
-                    <td style={{ padding: '6px', textAlign: 'right' }}>{row.gd}</td>
-                    <td style={{ padding: '6px', textAlign: 'right' }}>{row.points}</td>
-                  </tr>
+                  <Box
+                    key={row.team}
+                    borderWidth="1px"
+                    borderRadius="md"
+                    p={3}
+                    bg={row.team === TEAM_NAME ? 'blue.50' : 'white'}
+                  >
+                    <HStack justify="space-between" align="baseline">
+                      <Text fontWeight={row.team === TEAM_NAME ? 'semibold' : 'normal'}>{row.team}</Text>
+                      <Text fontWeight="bold">{row.points} pts</Text>
+                    </HStack>
+                    <Text color="gray.600" fontSize="sm" mt={1}>
+                      Pos {row.position || '-' } · P {row.played} · {row.won}-{row.drawn}-{row.lost} · GF {row.gf}:{row.ga} · GD {row.gd}
+                    </Text>
+                  </Box>
                 ))}
-                {standings.loading && (
-                  <tr><td colSpan={10} style={{ padding: '8px' }}>Loading standings…</td></tr>
-                )}
-              </tbody>
-            </table>
+              </Stack>
+            </Box>
+            {/* Desktop/tablet full table */}
+            <Box overflowX="auto" display={{ base: 'none', sm: 'block' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: 'left', padding: '6px' }}>Pos</th>
+                    <th style={{ textAlign: 'left', padding: '6px' }}>Team</th>
+                    <th style={{ textAlign: 'right', padding: '6px' }}>P</th>
+                    <th style={{ textAlign: 'right', padding: '6px' }}>W</th>
+                    <th style={{ textAlign: 'right', padding: '6px' }}>D</th>
+                    <th style={{ textAlign: 'right', padding: '6px' }}>L</th>
+                    <th style={{ textAlign: 'right', padding: '6px' }}>GF</th>
+                    <th style={{ textAlign: 'right', padding: '6px' }}>GA</th>
+                    <th style={{ textAlign: 'right', padding: '6px' }}>GD</th>
+                    <th style={{ textAlign: 'right', padding: '6px' }}>Pts</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(standings.data?.standings || []).map((row) => (
+                    <tr key={row.team} style={{ background: row.team === TEAM_NAME ? 'rgba(59,130,246,.08)' : 'transparent' }}>
+                      <td style={{ padding: '6px' }}>{row.position || ''}</td>
+                      <td style={{ padding: '6px', fontWeight: row.team === TEAM_NAME ? 600 : 400 }}>{row.team}</td>
+                      <td style={{ padding: '6px', textAlign: 'right' }}>{row.played}</td>
+                      <td style={{ padding: '6px', textAlign: 'right' }}>{row.won}</td>
+                      <td style={{ padding: '6px', textAlign: 'right' }}>{row.drawn}</td>
+                      <td style={{ padding: '6px', textAlign: 'right' }}>{row.lost}</td>
+                      <td style={{ padding: '6px', textAlign: 'right' }}>{row.gf}</td>
+                      <td style={{ padding: '6px', textAlign: 'right' }}>{row.ga}</td>
+                      <td style={{ padding: '6px', textAlign: 'right' }}>{row.gd}</td>
+                      <td style={{ padding: '6px', textAlign: 'right' }}>{row.points}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Box>
+            {/* Legend */}
+            <Text color="gray.600" fontSize="sm" mt={2}>
+              Legend: Pos = Position · P = Played · W = Won · D = Drawn · L = Lost · GF = For · GA = Against · GD = Difference · Pts = Points
+            </Text>
+          </>
+        ) : standings.loading ? (
+          <Center py={6}>
+            <HStack gap={3}>
+              <Spinner size="sm" />
+              <Text color="gray.600">Loading standings…</Text>
+            </HStack>
+          </Center>
+        ) : (
+          <Box>
+            <Text color="red.600">Failed to load standings. Please try again later.</Text>
+            {standings.errorDetail ? (
+              <Text color="red.500" fontSize="sm" mt={1}>{standings.errorDetail}</Text>
+            ) : null}
           </Box>
         )}
-        <HStack justify="space-between" mt={2}>
-          {standings.data?.scrapedAt ? (
-            <Text color="gray.500" fontSize="sm">Updated {new Date(standings.data.scrapedAt).toLocaleString()}</Text>
-          ) : <span />}
-          <Text color={standings.isFallback ? 'orange.600' : 'green.600'} fontSize="sm">
-            {standings.isFallback ? 'Sample data' : 'Live data'}
-          </Text>
-        </HStack>
+        {standings.data?.scrapedAt ? (
+          <Text color="gray.500" fontSize="sm" mt={2}>Updated {new Date(standings.data.scrapedAt).toLocaleString()}</Text>
+        ) : null}
       </Box>
 
       {isDialogOpen ? (
