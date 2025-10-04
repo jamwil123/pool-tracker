@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Timestamp, addDoc, collection, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore'
+import { Timestamp, addDoc, collection, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc, getDocs, where } from 'firebase/firestore'
 import type { ChangeEvent, FormEvent } from 'react'
 import { Link as RouterLink } from 'react-router-dom'
 import { db } from '../firebase/config'
 import { useAuth } from '../context/AuthContext'
 import type { SeasonGameDocument } from '../types/models'
 import { Box, Heading, Text, HStack, Button, SimpleGrid, Input } from '@chakra-ui/react'
+import { TEAM_NAME } from '../config/app'
 
 type SeasonGame = SeasonGameDocument & { id: string }
 type MatchFilter = 'upcoming' | 'previous'
@@ -84,6 +85,15 @@ const GamesList = () => {
   const setResult = async (id: string, result: 'win' | 'loss') => {
     if (!canManage) return
     try {
+      const current = games.find((g) => g.id === id)
+      if (!current) throw new Error('Match not found')
+      if (current.result === 'pending') {
+        const decidedSnap = await getDocs(query(collection(db, 'games'), where('result', 'in', ['win', 'loss'])))
+        if (decidedSnap.size >= 13) {
+          setError('Season cap reached: 13 results already recorded.')
+          return
+        }
+      }
       await updateDoc(doc(db, 'games', id), { result, updatedAt: serverTimestamp() })
     } catch (e) {
       console.error(e)
@@ -96,11 +106,14 @@ const GamesList = () => {
   return (
     <Box>
       <Box as="header" mb={4}>
-        {profile?.displayName ? (
-          <Heading size="lg" mb={1}>Welcome, {profile.displayName}</Heading>
-        ) : null}
-        <Heading size="md">Season Matches</Heading>
-        <Text color="gray.600">Browse fixtures and open a match to manage results.</Text>
+        <Heading size="lg">Season Matches</Heading>
+        <Text color="gray.600">{TEAM_NAME}</Text>
+        <Text color="gray.600">
+          {profile?.displayName ? (
+            <>Welcome, {profile.displayName}. </>
+          ) : null}
+          Browse fixtures and open a match to manage results.
+        </Text>
       </Box>
       <HStack justify="space-between" mb={3} style={{ flexWrap: 'wrap' }} gap={2}>
         <HStack gap={2}>

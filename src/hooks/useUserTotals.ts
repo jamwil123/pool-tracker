@@ -5,6 +5,8 @@ import { db } from '../firebase/config'
 
 export type DueGame = { id: string; opponent: string; matchDate: Date | null }
 
+export type NextGame = { id: string; opponent: string; matchDate: Date | null; location: string; homeOrAway: 'home' | 'away' }
+
 export type UserTotals = {
   loading: boolean
   error: string | null
@@ -12,6 +14,7 @@ export type UserTotals = {
   gamesCount: number
   subsDueCount: number
   subsDueGames: DueGame[]
+  nextGame: NextGame | null
 }
 
 // removed unused helper
@@ -68,7 +71,7 @@ export const useUserTotals = (uid: string): UserTotals => {
     }
   }, [uid])
 
-  const { totals, gamesCount, subsDueCount, subsDueGames } = useMemo(() => {
+  const { totals, gamesCount, subsDueCount, subsDueGames, nextGame } = useMemo(() => {
     const isMe = (id: unknown) => {
       const s = typeof id === 'string' ? id : ''
       return Boolean(s && (s === uid || (profileId && s === profileId)))
@@ -78,6 +81,8 @@ export const useUserTotals = (uid: string): UserTotals => {
     let count = 0
     let due = 0
     const dueGames: DueGame[] = []
+    let bestNext: NextGame | null = null
+    let bestTs: number | null = null
     for (const g of snapshots) {
       const stats = (g.data as any).playerStats as SeasonGamePlayerStat[] | undefined
       const partial = (() => {
@@ -105,11 +110,30 @@ export const useUserTotals = (uid: string): UserTotals => {
       wins += partial.wins
       losses += partial.losses
       count += 1
+
+      // Determine next upcoming match (nearest future date, regardless of assignment)
+      const hasDate = g.data.matchDate && 'toDate' in g.data.matchDate && typeof (g.data.matchDate as any).toDate === 'function'
+      const date = hasDate ? (g.data.matchDate as any).toDate() as Date : null
+      if (date) {
+        const ts = date.getTime()
+        if (ts >= Date.now()) {
+          if (bestTs === null || ts < bestTs) {
+            bestTs = ts
+            bestNext = {
+              id: g.id,
+              opponent: g.data.opponent || 'TBC',
+              matchDate: date,
+              location: (g.data as any).location || '',
+              homeOrAway: (g.data as any).homeOrAway === 'away' ? 'away' : 'home',
+            }
+          }
+        }
+      }
     }
-    return { totals: { wins, losses }, gamesCount: count, subsDueCount: due, subsDueGames: dueGames }
+    return { totals: { wins, losses }, gamesCount: count, subsDueCount: due, subsDueGames: dueGames, nextGame: bestNext }
   }, [snapshots, uid, profileId])
 
-  return { loading, error, totals, gamesCount, subsDueCount, subsDueGames }
+  return { loading, error, totals, gamesCount, subsDueCount, subsDueGames, nextGame }
 }
 
 export default useUserTotals

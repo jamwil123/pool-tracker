@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import type { ChangeEvent, FormEvent } from 'react'
-import { collection, doc, increment, onSnapshot, orderBy, query, runTransaction, serverTimestamp } from 'firebase/firestore'
+import { collection, doc, increment, onSnapshot, orderBy, query, runTransaction, serverTimestamp, where, limit } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuth } from '../context/AuthContext'
 import useGameTotalsForUser from '../hooks/useGameTotalsForUser'
@@ -32,9 +32,21 @@ const GamePage = () => {
   const [showEditorModal, setShowEditorModal] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const myUid = user?.uid ?? ''
+  const [myProfileId, setMyProfileId] = useState<string | null>(null)
   const myGameTotals = useGameTotalsForUser(gameId, myUid)
 
   const canManage = useMemo(() => !!profile && (profile.role === 'captain' || profile.role === 'viceCaptain'), [profile])
+
+  useEffect(() => {
+    // Resolve the user's profile auto-id so we can match stats saved with profileId
+    if (!myUid) { setMyProfileId(null); return }
+    const q = query(collection(db, 'userProfiles'), where('uid', '==', myUid), limit(1))
+    const unsub = onSnapshot(q, (snap) => {
+      if (!snap.empty) setMyProfileId(snap.docs[0].id)
+      else setMyProfileId(null)
+    })
+    return () => unsub()
+  }, [myUid])
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'games', gameId), (snap) => {
@@ -234,7 +246,7 @@ const GamePage = () => {
         <article className="card">
           <h3>Match Info</h3>
           {(() => {
-            const entry = myUid ? (game.playerStats || []).find((s) => s.playerId === myUid) : null
+            const entry = myUid ? (game.playerStats || []).find((s) => s.playerId === myUid || (myProfileId && s.playerId === myProfileId)) : null
             const showSubsDue = Boolean(entry && !(entry as any).subsPaid)
             return (
               <p className="meta">
@@ -279,7 +291,7 @@ const GamePage = () => {
             {game.playerStats?.length ? (
               <div id="player-results-panel" className="player-stats-summary">
                 {(game.playerStats).map((s) => (
-                  (canManage || s.playerId === myUid) ? (
+                  (canManage || s.playerId === myUid || (myProfileId && s.playerId === myProfileId)) ? (
                     <div key={s.playerId} className="player-stat-chip">
                       <strong>{s.displayName}</strong>
                       <span>Singles W/L {s.singlesWins}:{s.singlesLosses}</span>

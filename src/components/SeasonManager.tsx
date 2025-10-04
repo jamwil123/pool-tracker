@@ -14,8 +14,10 @@ import {
   updateDoc,
   where,
   limit,
+  getDocs,
 } from "firebase/firestore";
 import { db } from "../firebase/config";
+import { TEAM_NAME } from "../config/app";
 import { useAuth } from "../context/AuthContext";
 import type {
   PlayerDocument,
@@ -261,6 +263,15 @@ const SeasonManager = () => {
     if (!canManageGames) return;
 
     try {
+      const current = games.find((g) => g.id === gameId);
+      if (!current) throw new Error('Match not found');
+      if (current.result === 'pending') {
+        const decidedSnap = await getDocs(query(collection(db, 'games'), where('result', 'in', ['win', 'loss'])));
+        if (decidedSnap.size >= 13) {
+          setError('Season cap reached: 13 results already recorded.');
+          return;
+        }
+      }
       const gameRef = doc(db, "games", gameId);
       await updateDoc(gameRef, {
         result,
@@ -566,11 +577,14 @@ const SeasonManager = () => {
   return (
     <section className="panel">
       <header>
-        {profile?.displayName ? (
-          <h2>Welcome, {profile.displayName}</h2>
-        ) : null}
         <h2>Season Matches</h2>
-        <p>Keep track of upcoming fixtures and past results.</p>
+        <p style={{ margin: 0 }}>{TEAM_NAME}</p>
+        <p>
+          {profile?.displayName ? (
+            <>Welcome, {profile.displayName}. </>
+          ) : null}
+          Keep track of upcoming fixtures and past results.
+        </p>
       </header>
 
       {/* NEW: Logged-in user's wins/losses */}

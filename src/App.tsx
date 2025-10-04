@@ -7,6 +7,7 @@ const Home = lazy(() => import('./pages/Home'))
 const GamesList = lazy(() => import('./pages/GamesList'))
 const GamePage = lazy(() => import('./pages/GamePage'))
 import { Box, Container, Flex, Heading, Text, Button, HStack } from '@chakra-ui/react'
+import { APP_TITLE, TEAM_NAME } from './config/app'
 import ProfileSetup from './components/ProfileSetup'
 
 const AppShell = () => {
@@ -36,7 +37,8 @@ const AppShell = () => {
           <Box className="app-header" as="header" p={6} borderRadius="lg" boxShadow="md" bg="white">
             <Flex align="center" justify="space-between" gap={6} wrap="wrap">
               <Box>
-                <Heading size="lg">Pool Season Tracker</Heading>
+                <Heading size="lg">{APP_TITLE}</Heading>
+                <Text mt={1}>{TEAM_NAME}</Text>
                 <Text mt={1}>Signed in as {user.email} · Complete setup</Text>
               </Box>
               <Button onClick={signOut} colorScheme="blue" variant="solid">Sign Out</Button>
@@ -59,7 +61,8 @@ const AppShell = () => {
         <Box className="app-header" as="header" p={6} borderRadius="lg" boxShadow="md" bg="white">
           <Flex align="center" justify="space-between" gap={6} wrap="wrap">
             <Box>
-              <Heading size="lg">Pool Season Tracker</Heading>
+              <Heading size="lg">{APP_TITLE}</Heading>
+              <Text mt={1}>{TEAM_NAME}</Text>
               <Text mt={1}>Signed in as {user.email} · Role: {profile.role}</Text>
               <HStack gap={4} mt={2} as="nav">
                 <RouterLink to="/">Home</RouterLink>
