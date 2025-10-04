@@ -4,6 +4,7 @@ import type { ChangeEvent, FormEvent } from 'react'
 import { Link as RouterLink } from 'react-router-dom'
 import { db } from '../firebase/config'
 import { useAuth } from '../context/AuthContext'
+import { isManagerRole } from '../types/models'
 import type { SeasonGameDocument } from '../types/models'
 import { Box, Heading, Text, HStack, Button, SimpleGrid, Input } from '@chakra-ui/react'
 import { TEAM_NAME } from '../config/app'
@@ -29,9 +30,13 @@ const GamesList = () => {
   const [showForm, setShowForm] = useState(false)
   const [formState, setFormState] = useState<MatchFormState>(defaultFormState)
   const [submitting, setSubmitting] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingState, setEditingState] = useState<MatchFormState>(defaultFormState)
+  const [editingNotes, setEditingNotes] = useState<string>('')
+  const [editingSaving, setEditingSaving] = useState(false)
   
 
-  const canManage = useMemo(() => !!profile && (profile.role === 'captain' || profile.role === 'viceCaptain'), [profile])
+  const canManage = useMemo(() => !!profile && isManagerRole(profile.role), [profile])
 
   useEffect(() => {
     const q = query(collection(db, 'games'), orderBy('matchDate', 'asc'))
@@ -54,6 +59,58 @@ const GamesList = () => {
     setFormState((s) => ({ ...s, [field]: field === 'homeOrAway' ? (e.target.value as 'home' | 'away') : e.target.value }))
 
   const reset = () => { setFormState(defaultFormState); setShowForm(false) }
+
+  const toDateInput = (d: Timestamp | null | undefined) => {
+    if (!d) return ''
+    const dt = d.toDate()
+    const yyyy = dt.getFullYear()
+    const mm = String(dt.getMonth() + 1).padStart(2, '0')
+    const dd = String(dt.getDate()).padStart(2, '0')
+    return `${yyyy}-${mm}-${dd}`
+  }
+
+  const openEdit = (g: SeasonGame) => {
+    setEditingId(g.id)
+    setEditingState({
+      opponent: g.opponent || '',
+      matchDate: toDateInput(g.matchDate),
+      location: g.location || '',
+      homeOrAway: g.homeOrAway === 'away' ? 'away' : 'home',
+    })
+    // @ts-expect-error notes might be null
+    setEditingNotes((g as any).notes || '')
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditingSaving(false)
+    setEditingState(defaultFormState)
+    setEditingNotes('')
+  }
+
+  const saveEdit = async (e: FormEvent<HTMLFormElement>, id: string) => {
+    e.preventDefault()
+    if (!canManage) return
+    setEditingSaving(true)
+    setError(null)
+    try {
+      const payload: any = {
+        opponent: editingState.opponent.trim(),
+        matchDate: editingState.matchDate ? Timestamp.fromDate(new Date(editingState.matchDate)) : null,
+        location: editingState.location.trim(),
+        homeOrAway: editingState.homeOrAway,
+        notes: editingNotes.trim() || null,
+        updatedAt: serverTimestamp(),
+      }
+      await updateDoc(doc(db, 'games', id), payload)
+      cancelEdit()
+    } catch (err) {
+      console.error(err)
+      setError('Unable to save match changes.')
+    } finally {
+      setEditingSaving(false)
+    }
+  }
 
   const create = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -217,7 +274,61 @@ const GamesList = () => {
                   >
                     Mark Loss
                   </Button>
+                  <Button size="sm" variant="ghost" onClick={(e) => { e.preventDefault(); openEdit(g) }}>Edit</Button>
                 </HStack>
+              ) : null}
+
+              {canManage && editingId === g.id ? (
+                <Box
+                  mt={3}
+                  borderWidth="1px"
+                  borderRadius="md"
+                  p={3}
+                  bg="white"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation() }}
+                >
+                  <form onSubmit={(e) => saveEdit(e, g.id)}>
+                    <HStack gap={2} wrap="wrap">
+                      <Box flex="1 1 220px">
+                        <Text fontSize="sm" mb={1}>Team Name</Text>
+                        <Input value={editingState.opponent} onChange={(e) => setEditingState((s) => ({ ...s, opponent: e.target.value }))} required />
+                      </Box>
+                      <Box flex="1 1 160px">
+                        <Text fontSize="sm" mb={1}>Match Date</Text>
+                        <Input type="date" value={editingState.matchDate} onChange={(e) => setEditingState((s) => ({ ...s, matchDate: e.target.value }))} />
+                      </Box>
+                      <Box flex="1 1 180px">
+                        <Text fontSize="sm" mb={1}>Location</Text>
+                        <Input value={editingState.location} onChange={(e) => setEditingState((s) => ({ ...s, location: e.target.value }))} />
+                      </Box>
+                      <Box flex="0 1 140px">
+                        <Text fontSize="sm" mb={1}>Home/Away</Text>
+                        <select value={editingState.homeOrAway} onChange={(e) => setEditingState((s) => ({ ...s, homeOrAway: e.target.value as 'home' | 'away' }))}>
+                          <option value="home">Home</option>
+                          <option value="away">Away</option>
+                        </select>
+                      </Box>
+                      <Box flex="1 1 100%">
+                        <Text fontSize="sm" mb={1}>Notes</Text>
+                        <Input value={editingNotes} onChange={(e) => setEditingNotes(e.target.value)} placeholder="Optional notes" />
+                      </Box>
+                    </HStack>
+                    <HStack mt={3}>
+                      <Button type="submit" colorScheme="blue" isLoading={editingSaving} loadingText="Saving"
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); /* submit handled by form */ (e.currentTarget.closest('form') as HTMLFormElement)?.requestSubmit() }}
+                      >
+                        Save
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); cancelEdit() }}
+                      >
+                        Cancel
+                      </Button>
+                    </HStack>
+                  </form>
+                </Box>
               ) : null}
             </Box>
           </RouterLink>

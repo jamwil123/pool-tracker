@@ -4,8 +4,9 @@ import type { ChangeEvent, FormEvent } from 'react'
 import { collection, doc, increment, onSnapshot, orderBy, query, runTransaction, serverTimestamp, where, limit } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuth } from '../context/AuthContext'
+import { isManagerRole } from '../types/models'
 import useGameTotalsForUser from '../hooks/useGameTotalsForUser'
-import { Button, Alert, Box, CloseButton } from '@chakra-ui/react'
+import { Button, Alert, Box, CloseButton, Text, HStack } from '@chakra-ui/react'
 import { DialogRoot, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter, DialogCloseTrigger, DialogBackdrop, DialogPositioner } from '@chakra-ui/react'
 import type { SeasonGameDocument, SeasonGamePlayerStat, UserProfileDocument } from '../types/models'
 
@@ -35,7 +36,19 @@ const GamePage = () => {
   const [myProfileId, setMyProfileId] = useState<string | null>(null)
   const myGameTotals = useGameTotalsForUser(gameId, myUid)
 
-  const canManage = useMemo(() => !!profile && (profile.role === 'captain' || profile.role === 'viceCaptain'), [profile])
+  // Team caps: 10 singles frames; 3 doubles matches => 6 player credits
+  const SINGLES_TOTAL = 10
+  const DOUBLES_PLAYER_TOTAL = 6
+
+  const teamTotals = useMemo(() => {
+    const sW = rows.reduce((a, r) => a + (Number(r.singlesWins) || 0), 0)
+    const sL = rows.reduce((a, r) => a + (Number(r.singlesLosses) || 0), 0)
+    const dW = rows.reduce((a, r) => a + (Number(r.doublesWins) || 0), 0)
+    const dL = rows.reduce((a, r) => a + (Number(r.doublesLosses) || 0), 0)
+    return { sW, sL, dW, dL }
+  }, [rows])
+
+  const canManage = useMemo(() => !!profile && isManagerRole(profile.role), [profile])
 
   useEffect(() => {
     // Resolve the user's profile auto-id so we can match stats saved with profileId
@@ -157,6 +170,18 @@ const GamePage = () => {
       return
     }
 
+    // Validation: team totals must not exceed caps
+    const singlesTotalUsed = teamTotals.sW + teamTotals.sL
+    const doublesTotalUsed = teamTotals.dW + teamTotals.dL
+    if (singlesTotalUsed > SINGLES_TOTAL) {
+      setError(`Singles totals exceed ${SINGLES_TOTAL}. Currently ${teamTotals.sW} wins + ${teamTotals.sL} losses = ${singlesTotalUsed}.`)
+      return
+    }
+    if (doublesTotalUsed > DOUBLES_PLAYER_TOTAL) {
+      setError(`Doubles totals exceed ${DOUBLES_PLAYER_TOTAL} player credits (3 matches × 2). Currently ${teamTotals.dW} wins + ${teamTotals.dL} losses = ${doublesTotalUsed}.`)
+      return
+    }
+
     const stats: SeasonGamePlayerStat[] = rows
       .filter((r) => r.playerId)
       .map((r) => {
@@ -249,27 +274,32 @@ const GamePage = () => {
             const entry = myUid ? (game.playerStats || []).find((s) => s.playerId === myUid || (myProfileId && s.playerId === myProfileId)) : null
             const showSubsDue = Boolean(entry && !(entry as any).subsPaid)
             return (
-              <p className="meta">
-                Status:
-                {' '}
-                <span className={`tag status-${game.result}`}>
-                  {game.result === 'pending' ? 'Pending' : game.result === 'win' ? 'Win' : 'Loss'}
-                </span>
-                {showSubsDue ? (
-                  <span className="tag subs-due" style={{ marginLeft: '0.5rem' }}>Subs Due</span>
-                ) : null}
-              </p>
+              <>
+                <HStack gap={2} wrap="wrap" style={{ marginTop: 4 }}>
+                  <span className={`tag status-${game.result}`}>
+                    {game.result === 'pending' ? 'Pending' : game.result === 'win' ? 'Win' : 'Loss'}
+                  </span>
+                  <span className="tag">{game.homeOrAway === 'home' ? 'Home' : 'Away'}</span>
+                  {showSubsDue ? (
+                    <span className="tag subs-due">My Subs: Due</span>
+                  ) : entry ? (
+                    <span className="tag subs-paid">My Subs: Paid</span>
+                  ) : null}
+                </HStack>
+                <Box mt={2}>
+                  <Text color="gray.700">Date: {game.matchDate ? game.matchDate.toDate().toLocaleDateString() : 'TBC'}</Text>
+                  <Text color="gray.700">Location: {game.location || 'TBC'}</Text>
+                </Box>
+              </>
             )
           })()}
           {myUid && (
-            <div className="stats-row" style={{ marginTop: 8 }}>
-              <div className="stat-card">
-                <div className="stat-label">My Singles+Doubles</div>
-                {myGameTotals.loading ? <div className="stat-value">—</div> : (
-                  <div className="stat-value">{myGameTotals.totals.wins}:{myGameTotals.totals.losses}</div>
-                )}
-              </div>
-            </div>
+            <Box mt={3}>
+              <Text fontSize="sm" color="gray.600">My Frames (Singles + Doubles)</Text>
+              <Box className="stat-value" style={{ fontSize: 18, fontWeight: 600 }}>
+                {myGameTotals.loading ? '—' : `${myGameTotals.totals.wins}:${myGameTotals.totals.losses}`}
+              </Box>
+            </Box>
           )}
         </article>
         
@@ -313,8 +343,18 @@ const GamePage = () => {
       <DialogRoot open={showEditorModal} onOpenChange={({ open }) => setShowEditorModal(open)} modal>
         <DialogBackdrop />
         <DialogPositioner>
-          <DialogContent style={{ width: '100%', maxWidth: '920px' }}>
-          <DialogHeader>
+          <DialogContent
+            style={{
+              width: '100%',
+              maxWidth: '100%',
+              height: '90vh',
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
+              borderRadius: '12px',
+            }}
+          >
+          <DialogHeader style={{ position: 'sticky', top: 0, background: 'white', zIndex: 2 }}>
             <Box display="flex" alignItems="center" justifyContent="space-between" gap={3}>
               <DialogTitle>Edit Player Results</DialogTitle>
               <DialogCloseTrigger asChild>
@@ -322,13 +362,20 @@ const GamePage = () => {
               </DialogCloseTrigger>
             </Box>
           </DialogHeader>
-          <DialogBody>
+          <DialogBody style={{ overflowY: 'auto' }}>
             {error ? (
               <Alert.Root status="error" style={{ marginBottom: '0.75rem' }}>
                 <Alert.Indicator />
                 <Alert.Content>{error}</Alert.Content>
               </Alert.Root>
             ) : null}
+            <Box borderWidth="1px" borderRadius="md" p={3} bg="white" mb={3}>
+              <HStack justify="space-between" wrap="wrap" gap={2}>
+                <Text fontSize="sm">Singles used: <strong>{teamTotals.sW + teamTotals.sL}</strong> / {SINGLES_TOTAL} (W {teamTotals.sW} · L {teamTotals.sL})</Text>
+                <Text fontSize="sm">Doubles used: <strong>{teamTotals.dW + teamTotals.dL}</strong> / {DOUBLES_PLAYER_TOTAL} (W {teamTotals.dW} · L {teamTotals.dL})</Text>
+              </HStack>
+              <Text fontSize="xs" color="gray.600" mt={1}>Note: Doubles count is per player credit (3 matches × 2 players = 6).</Text>
+            </Box>
             <div className="player-result-grid">
               {rows.map((row) => (
                 <Box key={row.rowId} borderWidth="1px" borderRadius="md" p={3} mb={3} bg="white" borderColor={row.error ? 'red.300' : 'gray.200'}>
@@ -371,7 +418,7 @@ const GamePage = () => {
               <Button variant="outline" onClick={addRow} disabled={unselectedOptions.length === 0}>Add Player Result</Button>
             </div>
           </DialogBody>
-          <DialogFooter>
+          <DialogFooter style={{ position: 'sticky', bottom: 0, background: 'white', zIndex: 2 }}>
             <Button onClick={() => setShowEditorModal(false)} variant="ghost" style={{ marginRight: '0.75rem' }}>Cancel</Button>
             <Button colorScheme="blue" onClick={(e) => save(e as unknown as FormEvent<HTMLFormElement>)} loading={submitting}>Save Results</Button>
           </DialogFooter>

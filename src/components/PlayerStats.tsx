@@ -25,6 +25,7 @@ import {
 import { db } from "../firebase/config";
 import { useAuth } from "../context/AuthContext";
 import { Box, Heading, Text, Button, Input } from '@chakra-ui/react'
+import { isManagerRole } from '../types/models'
 import type { PlayerDocument, Role, RosterDocument } from "../types/models";
 
 type PlayerRecord = PlayerDocument & { id: string };
@@ -131,10 +132,7 @@ const PlayerStats = () => {
     return () => unsub();
   }, [profile]);
 
-  const canManagePlayers = useMemo(() => {
-    if (!profile) return false;
-    return profile.role === "captain" || profile.role === "viceCaptain";
-  }, [profile]);
+  const canManagePlayers = useMemo(() => !!profile && isManagerRole(profile.role), [profile]);
 
   const handleAddPlayer = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

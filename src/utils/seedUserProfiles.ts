@@ -7,6 +7,7 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import type { Role, RosterDocument, PlayerDocument, UserProfileDocument } from '../types/models'
+import { isRole } from '../types/models'
 import { db } from '../firebase/config'
 
 export type SeedOptions = {
@@ -23,10 +24,7 @@ export type SeedResult = {
   linked: number
 }
 
-const ensureRole = (role?: Role | string | null): Role => {
-  if (role === 'captain' || role === 'viceCaptain' || role === 'player') return role
-  return 'player'
-}
+const ensureRole = (role?: Role | string | null): Role => (isRole(role) ? role : 'player')
 
 const trimName = (name: unknown, fallback: string): string => {
   if (typeof name === 'string') {

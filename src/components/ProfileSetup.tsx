@@ -4,6 +4,7 @@ import { collection, doc, onSnapshot, runTransaction, serverTimestamp, query, wh
 import { db } from '../firebase/config'
 import { useAuth } from '../context/AuthContext'
 import type { PlayerDocument, Role, RosterDocument, UserProfileDocument } from '../types/models'
+import { isRole } from '../types/models'
 
 type RosterEntry = RosterDocument & { id: string }
 
@@ -25,12 +26,7 @@ const defaultState: ProfileSetupState = {
   submitting: false,
 }
 
-const ensureRole = (role?: Role | string | null): Role => {
-  if (role === 'captain' || role === 'viceCaptain' || role === 'player') {
-    return role
-  }
-  return 'player'
-}
+const ensureRole = (role?: Role | string | null): Role => (isRole(role) ? role : 'player')
 
 const normaliseDisplayName = (value: string, fallback: string) => {
   const trimmed = value.trim()

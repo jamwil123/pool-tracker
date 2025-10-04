@@ -1,6 +1,15 @@
 import type { FieldValue, Timestamp } from 'firebase/firestore'
 
-export type Role = 'captain' | 'viceCaptain' | 'player'
+// Single source of truth for roles
+export const ROLES = ['captain', 'viceCaptain', 'player'] as const
+export type Role = typeof ROLES[number]
+export const isRole = (v: unknown): v is Role =>
+  typeof v === 'string' && (ROLES as readonly string[]).includes(v)
+
+export const MANAGER_ROLES = ['captain', 'viceCaptain'] as const
+export type ManagerRole = typeof MANAGER_ROLES[number]
+export const isManagerRole = (v: unknown): v is ManagerRole =>
+  typeof v === 'string' && (MANAGER_ROLES as readonly string[]).includes(v)
 
 export type UserProfileDocument = {
   displayName: string

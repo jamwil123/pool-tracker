@@ -17,6 +17,7 @@ import {
   getDocs,
 } from "firebase/firestore";
 import { db } from "../firebase/config";
+import { isManagerRole } from "../types/models";
 import { TEAM_NAME } from "../config/app";
 import { useAuth } from "../context/AuthContext";
 import type {
@@ -216,10 +217,7 @@ const SeasonManager = () => {
     return () => unsub();
   }, [profile]);
 
-  const canManageGames = useMemo(() => {
-    if (!profile) return false;
-    return profile.role === "captain" || profile.role === "viceCaptain";
-  }, [profile]);
+  const canManageGames = useMemo(() => !!profile && isManagerRole(profile.role), [profile]);
 
   // Upcoming = date >= now OR pending-without-date; sort soonest first, nulls last
   const upcomingGames = useMemo(() => {
