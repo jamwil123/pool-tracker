@@ -116,7 +116,10 @@ export const useUserTotals = (uid: string): UserTotals => {
       const date = hasDate ? (g.data.matchDate as any).toDate() as Date : null
       if (date) {
         const ts = date.getTime()
-        if (ts >= Date.now()) {
+        const todayStart = new Date()
+        todayStart.setHours(0, 0, 0, 0)
+        const isTodayOrFuture = ts >= todayStart.getTime()
+        if (isTodayOrFuture) {
           if (bestTs === null || ts < bestTs) {
             bestTs = ts
             bestNext = {
