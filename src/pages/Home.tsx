@@ -1,7 +1,7 @@
 import { useAuth } from '../context/AuthContext'
 import { useState } from 'react'
 import useUserTotals from '../hooks/useUserTotals'
-import { Box, Heading, Text, HStack, SimpleGrid, Button, Stack, Spinner, Center } from '@chakra-ui/react'
+import { Box, Heading, Text, HStack, SimpleGrid, Button, Stack, Spinner, Center, Badge, ButtonGroup } from '@chakra-ui/react'
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts'
 import { Link as RouterLink } from 'react-router-dom'
 import { TEAM_NAME } from '../config/app'
@@ -13,6 +13,7 @@ const Home = () => {
   const { loading, totals, singles, subsDueCount, subsDueGames, nextGame } = useUserTotals(uid)
   const standings = useStandings()
   const [isDialogOpen, setDialogOpen] = useState(false)
+  const [chartMode, setChartMode] = useState<'all' | 'singles' | 'doubles'>('all')
   const onOpen = () => setDialogOpen(true)
   const onClose = () => setDialogOpen(false)
 
@@ -74,18 +75,42 @@ const Home = () => {
           )}
         </Box>
 
-        {/* Win/Loss chart */}
+        {/* Win/Loss chart with mode toggle */}
         <Box borderWidth="1px" borderRadius="lg" p={5} boxShadow="sm" bg="white" minH="220px">
-          <Heading as="h3" size="md" mb={2}>My Wins vs Losses</Heading>
+          <HStack justify="space-between" align="center" mb={3}>
+            <HStack gap={2} align="center">
+              <Heading as="h3" size="md">
+                {chartMode === 'all' ? 'My Wins vs Losses' : chartMode === 'singles' ? 'My Singles W/L' : 'My Doubles W/L'}
+              </Heading>
+              <Badge colorScheme={chartMode === 'all' ? 'blue' : chartMode === 'singles' ? 'cyan' : 'purple'} variant="solid" borderRadius="md">
+                {chartMode === 'all' ? 'ALL' : chartMode === 'singles' ? 'SINGLES' : 'DOUBLES'}
+              </Badge>
+            </HStack>
+            <ButtonGroup size="xs" isAttached variant="outline">
+              <Button colorScheme="blue" variant={chartMode === 'all' ? 'solid' : 'outline'} onClick={() => setChartMode('all')}>All</Button>
+              <Button colorScheme="cyan" variant={chartMode === 'singles' ? 'solid' : 'outline'} onClick={() => setChartMode('singles')}>Singles</Button>
+              <Button colorScheme="purple" variant={chartMode === 'doubles' ? 'solid' : 'outline'} onClick={() => setChartMode('doubles')}>Doubles</Button>
+            </ButtonGroup>
+          </HStack>
           <Box height="160px">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   dataKey="value"
-                  data={[
-                    { name: 'Wins', value: totals.wins },
-                    { name: 'Losses', value: totals.losses },
-                  ]}
+                  data={(function() {
+                    const allWins = totals.wins || 0
+                    const allLosses = totals.losses || 0
+                    const sWins = singles.wins || 0
+                    const sLosses = singles.losses || 0
+                    const dWins = Math.max(0, allWins - sWins)
+                    const dLosses = Math.max(0, allLosses - sLosses)
+                    const wins = chartMode === 'all' ? allWins : chartMode === 'singles' ? sWins : dWins
+                    const losses = chartMode === 'all' ? allLosses : chartMode === 'singles' ? sLosses : dLosses
+                    return [
+                      { name: 'Wins', value: wins },
+                      { name: 'Losses', value: losses },
+                    ]
+                  })()}
                   innerRadius={40}
                   outerRadius={60}
                   paddingAngle={2}
@@ -98,37 +123,22 @@ const Home = () => {
             </ResponsiveContainer>
           </Box>
           <HStack gap={4} mt={2}>
-            <span className="badge role-captain">Wins: {loading ? '—' : totals.wins}</span>
-            <span className="badge role-player">Losses: {loading ? '—' : totals.losses}</span>
-          </HStack>
-        </Box>
-
-        {/* Singles-only Win/Loss chart */}
-        <Box borderWidth="1px" borderRadius="lg" p={5} boxShadow="sm" bg="white" minH="220px">
-          <Heading as="h3" size="md" mb={2}>My Singles W/L</Heading>
-          <Box height="160px">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  dataKey="value"
-                  data={[
-                    { name: 'Singles Wins', value: singles.wins },
-                    { name: 'Singles Losses', value: singles.losses },
-                  ]}
-                  innerRadius={40}
-                  outerRadius={60}
-                  paddingAngle={2}
-                >
-                  <Cell fill="#0ea5e9" />
-                  <Cell fill="#f43f5e" />
-                </Pie>
-                <Tooltip formatter={(v) => String(v)} />
-              </PieChart>
-            </ResponsiveContainer>
-          </Box>
-          <HStack gap={4} mt={2}>
-            <span className="badge role-captain">Singles Wins: {loading ? '—' : singles.wins}</span>
-            <span className="badge role-player">Singles Losses: {loading ? '—' : singles.losses}</span>
+            {(() => {
+              const allWins = totals.wins || 0
+              const allLosses = totals.losses || 0
+              const sWins = singles.wins || 0
+              const sLosses = singles.losses || 0
+              const dWins = Math.max(0, allWins - sWins)
+              const dLosses = Math.max(0, allLosses - sLosses)
+              const wins = chartMode === 'all' ? allWins : chartMode === 'singles' ? sWins : dWins
+              const losses = chartMode === 'all' ? allLosses : chartMode === 'singles' ? sLosses : dLosses
+              return (
+                <>
+                  <span className="badge role-captain">Wins: {loading ? '—' : wins}</span>
+                  <span className="badge role-player">Losses: {loading ? '—' : losses}</span>
+                </>
+              )
+            })()}
           </HStack>
         </Box>
 

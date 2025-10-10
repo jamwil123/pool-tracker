@@ -32,7 +32,11 @@ const classify = (game: SeasonGame): MatchFilter => {
 const GamesList = () => {
   const { profile } = useAuth()
   const [games, setGames] = useState<SeasonGame[]>([])
-  const [filter, setFilter] = useState<MatchFilter>('upcoming')
+  const [filter, setFilter] = useState<MatchFilter>(() => {
+    if (typeof window === 'undefined') return 'upcoming'
+    const saved = window.localStorage.getItem('gamesTab') as MatchFilter | null
+    return saved === 'previous' || saved === 'upcoming' ? saved : 'upcoming'
+  })
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [formState, setFormState] = useState<MatchFormState>(defaultFormState)
@@ -59,9 +63,25 @@ const GamesList = () => {
     return () => unsub()
   }, [])
 
+  // Persist selected tab across navigations
+  useEffect(() => {
+    try { window.localStorage.setItem('gamesTab', filter) } catch {}
+  }, [filter])
+
+  const toMillis = (g: SeasonGame) => g.matchDate instanceof Timestamp ? g.matchDate.toMillis() : null
   const upcoming = games.filter((g) => classify(g) === 'upcoming')
   const previous = games.filter((g) => classify(g) === 'previous')
-  const visible = filter === 'upcoming' ? upcoming : previous
+  const previousSorted = [...previous].sort((a, b) => {
+    const ta = toMillis(a)
+    const tb = toMillis(b)
+    if (ta !== null && tb !== null) return tb - ta // newest first
+    if (ta === null && tb !== null) return 1 // nulls last
+    if (ta !== null && tb === null) return -1
+    const ua = (a as any).updatedAt instanceof Timestamp ? (a as any).updatedAt.toMillis() : 0
+    const ub = (b as any).updatedAt instanceof Timestamp ? (b as any).updatedAt.toMillis() : 0
+    return ub - ua
+  })
+  const visible = filter === 'upcoming' ? upcoming : previousSorted
 
   const onChange = (field: keyof MatchFormState) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setFormState((s) => ({ ...s, [field]: field === 'homeOrAway' ? (e.target.value as 'home' | 'away') : e.target.value }))

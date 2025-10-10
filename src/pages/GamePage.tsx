@@ -6,7 +6,8 @@ import { db } from '../firebase/config'
 import { useAuth } from '../context/AuthContext'
 import { isManagerRole } from '../types/models'
 import useGameTotalsForUser from '../hooks/useGameTotalsForUser'
-import { Button, Alert, Box, CloseButton, Text, HStack } from '@chakra-ui/react'
+import { Button, Alert, Box, CloseButton, Text, HStack, Badge, ButtonGroup } from '@chakra-ui/react'
+import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts'
 import { DialogRoot, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter, DialogCloseTrigger, DialogBackdrop, DialogPositioner } from '@chakra-ui/react'
 import type { SeasonGameDocument, SeasonGamePlayerStat, UserProfileDocument } from '../types/models'
 
@@ -47,6 +48,20 @@ const GamePage = () => {
     const dL = rows.reduce((a, r) => a + (Number(r.doublesLosses) || 0), 0)
     return { sW, sL, dW, dL }
   }, [rows])
+
+  const myStats = useMemo(() => {
+    if (!game) return { sW: 0, sL: 0, dW: 0, dL: 0 }
+    const stats = (game.playerStats || []) as SeasonGamePlayerStat[]
+    const me = stats.find((s) => s && (s.playerId === myUid || (myProfileId && s.playerId === myProfileId)))
+    return {
+      sW: Number(me?.singlesWins || 0),
+      sL: Number(me?.singlesLosses || 0),
+      dW: Number(me?.doublesWins || 0),
+      dL: Number(me?.doublesLosses || 0),
+    }
+  }, [game, myUid, myProfileId])
+
+  const [chartMode, setChartMode] = useState<'all' | 'singles' | 'doubles'>('all')
 
   const canManage = useMemo(() => !!profile && isManagerRole(profile.role), [profile])
 
@@ -295,10 +310,21 @@ const GamePage = () => {
           })()}
           {myUid && (
             <Box mt={3}>
-              <Text fontSize="sm" color="gray.600">My Frames (Singles + Doubles)</Text>
-              <Box className="stat-value" style={{ fontSize: 18, fontWeight: 600 }}>
-                {myGameTotals.loading ? '—' : `${myGameTotals.totals.wins}:${myGameTotals.totals.losses}`}
-              </Box>
+              <Text fontSize="sm" color="gray.600">My Frames</Text>
+              <HStack gap={3} mt={2} style={{ flexWrap: 'wrap' }}>
+                <Box borderWidth="1px" borderRadius="md" p={3} minW="120px" textAlign="center" bg="white">
+                  <Text fontSize="sm" color="gray.600">Singles (W:L)</Text>
+                  <Text fontSize="xl" fontWeight="bold">
+                    {myGameTotals.loading ? '—' : `${myStats.sW}:${myStats.sL}`}
+                  </Text>
+                </Box>
+                <Box borderWidth="1px" borderRadius="md" p={3} minW="120px" textAlign="center" bg="white">
+                  <Text fontSize="sm" color="gray.600">Doubles (W:L)</Text>
+                  <Text fontSize="xl" fontWeight="bold">
+                    {myGameTotals.loading ? '—' : `${myStats.dW}:${myStats.dL}`}
+                  </Text>
+                </Box>
+              </HStack>
             </Box>
           )}
         </article>
@@ -335,6 +361,54 @@ const GamePage = () => {
               <p className="hint" id="player-results-panel">No player results yet.</p>
             )}
           </article>
+
+          {/* My Match Breakdown chart with mode toggle */}
+          {myUid ? (
+            <article className="card">
+              <header className="card-header">
+                <HStack justify="space-between" align="center">
+                  <HStack gap={2} align="center">
+                    <h3>My Match Breakdown</h3>
+                    <Badge colorScheme={chartMode === 'all' ? 'blue' : chartMode === 'singles' ? 'cyan' : 'purple'} variant="solid" borderRadius="md">
+                      {chartMode === 'all' ? 'ALL' : chartMode === 'singles' ? 'SINGLES' : 'DOUBLES'}
+                    </Badge>
+                  </HStack>
+                  <ButtonGroup size="xs" isAttached variant="outline">
+                    <Button colorScheme="blue" variant={chartMode === 'all' ? 'solid' : 'outline'} onClick={() => setChartMode('all')}>All</Button>
+                    <Button colorScheme="cyan" variant={chartMode === 'singles' ? 'solid' : 'outline'} onClick={() => setChartMode('singles')}>Singles</Button>
+                    <Button colorScheme="purple" variant={chartMode === 'doubles' ? 'solid' : 'outline'} onClick={() => setChartMode('doubles')}>Doubles</Button>
+                  </ButtonGroup>
+                </HStack>
+              </header>
+              {(() => {
+                const allWins = myStats.sW + myStats.dW
+                const allLosses = myStats.sL + myStats.dL
+                const wins = chartMode === 'all' ? allWins : chartMode === 'singles' ? myStats.sW : myStats.dW
+                const losses = chartMode === 'all' ? allLosses : chartMode === 'singles' ? myStats.sL : myStats.dL
+                const total = wins + losses
+                if (total === 0) return <p className="hint">No frames recorded for the selected view.</p>
+                return (
+                  <>
+                    <Box height="200px">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie dataKey="value" data={[{ name: 'Wins', value: wins }, { name: 'Losses', value: losses }]} innerRadius={40} outerRadius={60} paddingAngle={2}>
+                            <Cell fill="#16a34a" />
+                            <Cell fill="#ef4444" />
+                          </Pie>
+                          <Tooltip formatter={(v: any) => String(v)} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </Box>
+                    <HStack gap={4} mt={2}>
+                      <span className="badge role-captain">Wins: {wins}</span>
+                      <span className="badge role-player">Losses: {losses}</span>
+                    </HStack>
+                  </>
+                )
+              })()}
+            </article>
+          ) : null}
 
           {/* Modal editor trigger only; editor rendered as modal below */}
         </div>
