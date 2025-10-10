@@ -1,4 +1,4 @@
-import { collection, doc, getDocs, runTransaction } from 'firebase/firestore'
+import { collection, doc, getDocs, runTransaction, Timestamp, updateDoc } from 'firebase/firestore'
 import type { SeasonGameDocument, SeasonGamePlayerStat } from '../types/models'
 import { db } from '../firebase/config'
 
@@ -23,3 +23,25 @@ export const backfillPlayerIds = async (): Promise<number> => {
 
 export default backfillPlayerIds
 
+// Backfill matchDate from notes (YYYY-MM-DD) at 20:00 local
+export const backfillMatchDatesFromNotes = async (): Promise<number> => {
+  const gamesSnap = await getDocs(collection(db, 'games'))
+  let updated = 0
+  for (const d of gamesSnap.docs) {
+    const data = d.data() as any
+    if (data.matchDate) continue
+    const notes = typeof data.notes === 'string' ? data.notes.trim() : ''
+    if (!notes) continue
+    const parsed = new Date(notes)
+    if (Number.isNaN(parsed.getTime())) continue
+    const at20 = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 20, 0, 0, 0)
+    try {
+      await updateDoc(doc(db, 'games', d.id), { matchDate: Timestamp.fromDate(at20) })
+      updated += 1
+    } catch (e) {
+      // ignore and continue
+      console.warn('Failed backfilling matchDate for', d.id, e)
+    }
+  }
+  return updated
+}

@@ -11,6 +11,7 @@ export type UserTotals = {
   loading: boolean
   error: string | null
   totals: { wins: number; losses: number }
+  singles: { wins: number; losses: number }
   gamesCount: number
   subsDueCount: number
   subsDueGames: DueGame[]
@@ -71,13 +72,15 @@ export const useUserTotals = (uid: string): UserTotals => {
     }
   }, [uid])
 
-  const { totals, gamesCount, subsDueCount, subsDueGames, nextGame } = useMemo(() => {
+  const { totals, singles, gamesCount, subsDueCount, subsDueGames, nextGame } = useMemo(() => {
     const isMe = (id: unknown) => {
       const s = typeof id === 'string' ? id : ''
       return Boolean(s && (s === uid || (profileId && s === profileId)))
     }
     let wins = 0
     let losses = 0
+    let singlesWins = 0
+    let singlesLosses = 0
     let count = 0
     let due = 0
     const dueGames: DueGame[] = []
@@ -93,6 +96,8 @@ export const useUserTotals = (uid: string): UserTotals => {
           if (s && isMe(s.playerId)) {
             w += (Number(s.singlesWins) || 0) + (Number(s.doublesWins) || 0)
             l += (Number(s.singlesLosses) || 0) + (Number(s.doublesLosses) || 0)
+            singlesWins += Number(s.singlesWins) || 0
+            singlesLosses += Number(s.singlesLosses) || 0
           }
         }
         return { wins: w, losses: l }
@@ -133,10 +138,10 @@ export const useUserTotals = (uid: string): UserTotals => {
         }
       }
     }
-    return { totals: { wins, losses }, gamesCount: count, subsDueCount: due, subsDueGames: dueGames, nextGame: bestNext }
+    return { totals: { wins, losses }, singles: { wins: singlesWins, losses: singlesLosses }, gamesCount: count, subsDueCount: due, subsDueGames: dueGames, nextGame: bestNext }
   }, [snapshots, uid, profileId])
 
-  return { loading, error, totals, gamesCount, subsDueCount, subsDueGames, nextGame }
+  return { loading, error, totals, singles, gamesCount, subsDueCount, subsDueGames, nextGame }
 }
 
 export default useUserTotals

@@ -12,9 +12,11 @@ import {
   runTransaction,
   serverTimestamp,
   updateDoc,
+  setDoc,
   where,
   limit,
   getDocs,
+  getDoc,
 } from "firebase/firestore";
 import { db } from "../firebase/config";
 import { isManagerRole } from "../types/models";
@@ -112,6 +114,48 @@ const resolveUid = (profile: any | null | undefined): string | null => {
   return profile.uid ?? profile.id ?? null;
 };
 
+// --- import helpers ---
+const slugify = (s: string) =>
+  String(s || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+
+type RawImportGame = Partial<SeasonGameDocument> & { notes?: string | null } & {
+  opponent?: string;
+  location?: string;
+  homeOrAway?: "home" | "away" | string;
+  matchDate?: string | null;
+};
+
+const parseYyyyMmDdToTimestamp20 = (s: string | null | undefined) => {
+  if (!s || typeof s !== 'string') return null as any
+  const t = s.trim()
+  if (!t) return null as any
+  const d = new Date(t)
+  if (Number.isNaN(d.getTime())) return null as any
+  const at20 = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 20, 0, 0, 0)
+  return Timestamp.fromDate(at20)
+}
+
+const normalizeImportGame = (row: RawImportGame): Omit<SeasonGameDocument, "createdAt" | "updatedAt"> => {
+  const opponent = typeof row.opponent === "string" ? row.opponent.trim() : "TBC";
+  const location = typeof row.location === "string" ? row.location.trim() : "";
+  const homeOrAway = row.homeOrAway === "away" ? "away" : "home";
+  const notes = typeof row.notes === "string" && row.notes.trim().length ? row.notes.trim() : null;
+  const players = Array.isArray(row.players) ? row.players : [];
+  const playerStats = sanitizePlayerStats(row.playerStats ?? []);
+  const result = row.result === "win" || row.result === "loss" ? row.result : "pending";
+  // Set matchDate at 20:00 local using matchDate string or notes fallback
+  const matchDate = row.matchDate ? parseYyyyMmDdToTimestamp20(row.matchDate as any) : parseYyyyMmDdToTimestamp20(notes as any);
+  return { opponent, matchDate, location, homeOrAway, players, playerStats, result, notes };
+};
+
+const buildStableMatchId = (g: Omit<SeasonGameDocument, "createdAt" | "updatedAt">) => {
+  const dateLabel = g.notes || (g.matchDate ? g.matchDate.toDate().toISOString().slice(0, 10) : "tbc");
+  return `match-${dateLabel}-${g.homeOrAway}-${slugify(g.opponent)}`;
+};
+
 const SeasonManager = () => {
   const { profile } = useAuth();
   const [games, setGames] = useState<SeasonGame[]>([]);
@@ -121,6 +165,13 @@ const SeasonManager = () => {
   const [showForm, setShowForm] = useState(false);
   const [formState, setFormState] = useState<MatchFormState>(defaultFormState);
   const [submitting, setSubmitting] = useState(false);
+  // Import fixtures state
+  const [showImporter, setShowImporter] = useState(false);
+  const [importText, setImportText] = useState<string>("[
+  {\n    \"opponent\": \"Washhouse Miners\",\n    \"matchDate\": null,\n    \"location\": \"Miners Arms\",\n    \"homeOrAway\": \"away\",\n    \"players\": [],\n    \"playerStats\": [],\n    \"result\": \"pending\",\n    \"notes\": \"2025-10-16\",\n    \"createdAt\": null,\n    \"updatedAt\": null\n  },\n  {\n    \"opponent\": \"Roundabout\",\n    \"matchDate\": null,\n    \"location\": \"Roundabout\",\n    \"homeOrAway\": \"away\",\n    \"players\": [],\n    \"playerStats\": [],\n    \"result\": \"pending\",\n    \"notes\": \"2025-10-23\",\n    \"createdAt\": null,\n    \"updatedAt\": null\n  },\n  {\n    \"opponent\": \"Railway Club\",\n    \"matchDate\": null,\n    \"location\": \"Railway Club\",\n    \"homeOrAway\": \"away\",\n    \"players\": [],\n    \"playerStats\": [],\n    \"result\": \"pending\",\n    \"notes\": \"2025-10-30\",\n    \"createdAt\": null,\n    \"updatedAt\": null\n  },\n  {\n    \"opponent\": \"Roundabout\",\n    \"matchDate\": null,\n    \"location\": \"Union Jack Club\",\n    \"homeOrAway\": \"home\",\n    \"players\": [],\n    \"playerStats\": [],\n    \"result\": \"pending\",\n    \"notes\": \"2025-11-06\",\n    \"createdAt\": null,\n    \"updatedAt\": null\n  },\n  {\n    \"opponent\": \"Vinnies\",\n    \"matchDate\": null,\n    \"location\": \"Vinnies\",\n    \"homeOrAway\": \"away\",\n    \"players\": [],\n    \"playerStats\": [],\n    \"result\": \"pending\",\n    \"notes\": \"2025-11-13\",\n    \"createdAt\": null,\n    \"updatedAt\": null\n  },\n  {\n    \"opponent\": \"Grapes B\",\n    \"matchDate\": null,\n    \"location\": \"Union Jack Club\",\n    \"homeOrAway\": \"home\",\n    \"players\": [],\n    \"playerStats\": [],\n    \"result\": \"pending\",\n    \"notes\": \"2025-11-20\",\n    \"createdAt\": null,\n    \"updatedAt\": null\n  },\n  {\n    \"opponent\": \"JJ's E\",\n    \"matchDate\": null,\n    \"location\": \"Union Jack Club\",\n    \"homeOrAway\": \"home\",\n    \"players\": [],\n    \"playerStats\": [],\n    \"result\": \"pending\",\n    \"notes\": \"2025-11-27\",\n    \"createdAt\": null,\n    \"updatedAt\": null\n  },\n  {\n    \"opponent\": \"Vinnies\",\n    \"matchDate\": null,\n    \"location\": \"Union Jack Club\",\n    \"homeOrAway\": \"home\",\n    \"players\": [],\n    \"playerStats\": [],\n    \"result\": \"pending\",\n    \"notes\": \"2025-12-04\",\n    \"createdAt\": null,\n    \"updatedAt\": null\n  },\n  {\n    \"opponent\": \"Grapes B\",\n    \"matchDate\": null,\n    \"location\": \"Grapes\",\n    \"homeOrAway\": \"away\",\n    \"players\": [],\n    \"playerStats\": [],\n    \"result\": \"pending\",\n    \"notes\": \"2025-12-18\",\n    \"createdAt\": null,\n    \"updatedAt\": null\n  },\n  {\n    \"opponent\": \"Union Jack A\",\n    \"matchDate\": null,\n    \"location\": \"Union Jack Club\",\n    \"homeOrAway\": \"home\",\n    \"players\": [],\n    \"playerStats\": [],\n    \"result\": \"pending\",\n    \"notes\": \"2026-01-08\",\n    \"createdAt\": null,\n    \"updatedAt\": null\n  },\n  {\n    \"opponent\": \"JJ's D\",\n    \"matchDate\": null,\n    \"location\": \"JJ's\",\n    \"homeOrAway\": \"away\",\n    \"players\": [],\n    \"playerStats\": [],\n    \"result\": \"pending\",\n    \"notes\": \"2026-01-15\",\n    \"createdAt\": null,\n    \"updatedAt\": null\n  },\n  {\n    \"opponent\": \"Washhouse Miners\",\n    \"matchDate\": null,\n    \"location\": \"Union Jack Club\",\n    \"homeOrAway\": \"home\",\n    \"players\": [],\n    \"playerStats\": [],\n    \"result\": \"pending\",\n    \"notes\": \"2026-02-12\",\n    \"createdAt\": null,\n    \"updatedAt\": null\n  },\n  {\n    \"opponent\": \"JJ's E\",\n    \"matchDate\": null,\n    \"location\": \"JJ's\",\n    \"homeOrAway\": \"away\",\n    \"players\": [],\n    \"playerStats\": [],\n    \"result\": \"pending\",\n    \"notes\": \"2026-03-05\",\n    \"createdAt\": null,\n    \"updatedAt\": null\n  },\n  {\n    \"opponent\": \"JJ's E\",\n    \"matchDate\": null,\n    \"location\": \"Union Jack Club\",\n    \"homeOrAway\": \"home\",\n    \"players\": [],\n    \"playerStats\": [],\n    \"result\": \"pending\",\n    \"notes\": \"2026-04-02\",\n    \"createdAt\": null,\n    \"updatedAt\": null\n  }\n]"
+  );
+  const [importing, setImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
   const [activeMatchId, setActiveMatchId] = useState<string | null>(null);
   const [rows, setRows] = useState<PlayerStatRow[]>([]);
   const [statsSubmitting, setStatsSubmitting] = useState(false);
@@ -257,6 +308,17 @@ const SeasonManager = () => {
 
   const visibleGames = filter === "upcoming" ? upcomingGames : previousGames;
 
+  const formatDateLabel = (game: SeasonGame): string => {
+    if (game.matchDate instanceof Timestamp) return game.matchDate.toDate().toLocaleDateString();
+    const n = game.notes;
+    if (typeof n === 'string' && n.trim()) {
+      const d = new Date(n.trim());
+      if (!Number.isNaN(d.getTime())) return d.toLocaleDateString();
+      return n.trim();
+    }
+    return 'Date TBC';
+  };
+
   const handleUpdateResult = async (gameId: string, result: "win" | "loss") => {
     if (!canManageGames) return;
 
@@ -329,6 +391,46 @@ const SeasonManager = () => {
       setError("Unable to add the match. Please try again.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleImportFixtures = async () => {
+    if (!canManageGames) return;
+    setImporting(true);
+    setImportMessage(null);
+    try {
+      const data = JSON.parse(importText) as RawImportGame[];
+      if (!Array.isArray(data)) throw new Error("Input must be a JSON array");
+
+      let created = 0;
+      let skipped = 0;
+      let updated = 0;
+
+      for (const row of data) {
+        const g = normalizeImportGame(row);
+        const id = buildStableMatchId(g);
+        const ref = doc(db, "games", id);
+        const snap = await getDoc(ref);
+        if (snap.exists()) {
+          // Skip if already exists to be safe
+          skipped++;
+          continue;
+        }
+        await setDoc(ref, {
+          ...g,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        created++;
+      }
+
+      setImportMessage(`Import complete. Created: ${created}, Skipped: ${skipped}, Updated: ${updated}`);
+      setShowImporter(false);
+    } catch (err: any) {
+      console.error("Import failed", err);
+      setImportMessage(`Import failed: ${err?.message || String(err)}`);
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -681,6 +783,31 @@ const SeasonManager = () => {
       ) : null}
 
       <div className="list">
+        {canManageGames ? (
+          <div className="importer" style={{ marginBottom: 16 }}>
+            <button type="button" onClick={() => setShowImporter((v) => !v)} className="secondary-button">
+              {showImporter ? "Close Import Fixtures" : "Import Fixtures"}
+            </button>
+            {showImporter ? (
+              <div style={{ marginTop: 8 }}>
+                <p className="hint">Paste the fixtures JSON below and click Import. Your current sign-in will be used; no service account needed.</p>
+                <textarea
+                  value={importText}
+                  onChange={(e) => setImportText(e.target.value)}
+                  rows={10}
+                  style={{ width: "100%" }}
+                />
+                <div className="actions">
+                  <button type="button" onClick={handleImportFixtures} disabled={importing}>
+                    {importing ? "Importing…" : "Import"}
+                  </button>
+                </div>
+                {importMessage ? <p className={importMessage.startsWith('Import failed') ? 'error' : 'hint'}>{importMessage}</p> : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+        
         {visibleGames.length === 0 ? (
           <p>
             {filter === "upcoming"
@@ -694,9 +821,7 @@ const SeasonManager = () => {
               <div>
                 <h3>{game.opponent}</h3>
                 <p>
-                  {game.matchDate
-                    ? game.matchDate.toDate().toLocaleDateString()
-                    : "Date TBC"}{" "}
+                  {formatDateLabel(game)}{" "}
                   · {game.location || "Location TBC"}
                 </p>
               </div>

@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "seed:userProfiles": "node scripts/seedUserProfiles.mjs"
+    "seed:userProfiles": "node scripts/seedUserProfiles.mjs",
+    "seed:games": "node scripts/seedGames.mjs"
   },
   "dependencies": {
     "@chakra-ui/react": "^3.27.0",

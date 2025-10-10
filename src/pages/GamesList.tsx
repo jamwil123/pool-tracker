@@ -16,10 +16,17 @@ type MatchFormState = { opponent: string; matchDate: string; location: string; h
 const defaultFormState: MatchFormState = { opponent: '', matchDate: '', location: '', homeOrAway: 'home' }
 
 const classify = (game: SeasonGame): MatchFilter => {
-  if (game.matchDate instanceof Timestamp) {
-    return game.matchDate.toDate().getTime() >= Date.now() ? 'upcoming' : 'previous'
-  }
-  return game.result === 'pending' ? 'upcoming' : 'previous'
+  // If a result has been recorded, treat as previous
+  if (game.result === 'win' || game.result === 'loss') return 'previous'
+
+  // Pending results: keep in Upcoming through the entire match day
+  const dt = game.matchDate instanceof Timestamp ? game.matchDate.toDate() : null
+  if (!dt) return 'upcoming'
+
+  const now = new Date()
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
+  // If the date is before today, it's previous; otherwise it's upcoming (today or future)
+  return dt.getTime() < startOfToday.getTime() ? 'previous' : 'upcoming'
 }
 
 const GamesList = () => {
@@ -81,6 +88,18 @@ const GamesList = () => {
     setEditingNotes((g as any).notes || '')
   }
 
+  const formatDateLabel = (g: SeasonGame): string => {
+    if (g.matchDate instanceof Timestamp) return g.matchDate.toDate().toLocaleDateString()
+    const n = (g as any).notes as string | null | undefined
+    if (typeof n === 'string' && n.trim()) {
+      // Try to parse YYYY-MM-DD in notes
+      const d = new Date(n.trim())
+      if (!Number.isNaN(d.getTime())) return d.toLocaleDateString()
+      return n.trim()
+    }
+    return 'Date TBC'
+  }
+
   const cancelEdit = () => {
     setEditingId(null)
     setEditingSaving(false)
@@ -115,7 +134,7 @@ const GamesList = () => {
   const deleteMatch = async (id: string) => {
     if (!canManage) return
     const g = games.find((x) => x.id === id)
-    const label = g ? `${g.opponent} (${g.matchDate ? g.matchDate.toDate().toLocaleDateString() : 'Date TBC'})` : id
+    const label = g ? `${g.opponent} (${formatDateLabel(g)})` : id
     const ok = window.confirm(`Delete match ${label}? This cannot be undone.`)
     if (!ok) return
     setDeletingId(id)
@@ -254,7 +273,15 @@ const GamesList = () => {
           const isPast = !!matchDate && matchDate.getTime() < now.getTime()
           const canSetResult = Boolean(matchDate && (isSameDay || isPast))
           return (
-          <RouterLink key={g.id} to={`/games/${g.id}`} style={{ textDecoration: 'none' }}>
+          <RouterLink
+            key={g.id}
+            to={`/games/${g.id}`}
+            style={{ textDecoration: 'none' }}
+            onClick={(e) => {
+              // Prevent navigation while editing within the card, but allow input defaults (e.g., date picker)
+              if (canManage && editingId === g.id) e.preventDefault()
+            }}
+          >
             <Box
               borderWidth="1px"
               borderRadius="lg"
@@ -267,7 +294,7 @@ const GamesList = () => {
               <HStack justify="space-between" align="start">
                 <Box>
                   <Heading as="h3" size="sm" mb={1}>{g.opponent}</Heading>
-                  <Text color="gray.600">{g.matchDate ? g.matchDate.toDate().toLocaleDateString() : 'Date TBC'} · {g.location || 'Location TBC'}</Text>
+                  <Text color="gray.600">{formatDateLabel(g)} · {g.location || 'Location TBC'}</Text>
                 </Box>
                 <Box className={`tag status-${g.result}`}>
                   {g.result === 'pending' ? 'Pending' : g.result === 'win' ? 'Win' : 'Loss'}
@@ -313,7 +340,6 @@ const GamesList = () => {
                   borderRadius="md"
                   p={3}
                   bg="white"
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation() }}
                 >
                   <form onSubmit={(e) => saveEdit(e, g.id)}>
                     <HStack gap={2} wrap="wrap">

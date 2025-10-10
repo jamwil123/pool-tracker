@@ -10,7 +10,7 @@ import useStandings from '../hooks/useStandings'
 const Home = () => {
   const { user, profile } = useAuth()
   const uid = user?.uid ?? ''
-  const { loading, totals, subsDueCount, subsDueGames, nextGame } = useUserTotals(uid)
+  const { loading, totals, singles, subsDueCount, subsDueGames, nextGame } = useUserTotals(uid)
   const standings = useStandings()
   const [isDialogOpen, setDialogOpen] = useState(false)
   const onOpen = () => setDialogOpen(true)
@@ -64,7 +64,7 @@ const Home = () => {
           {nextGame ? (
             <>
               <Text fontWeight="medium">{nextGame.opponent}</Text>
-              <Text color="gray.600" mt={1}>{nextGame.matchDate?.toLocaleDateString()} · {nextGame.location || 'Location TBC'}</Text>
+              <Text color="gray.600" mt={1}>{(() => { const n = (nextGame as any).notes; if (nextGame.matchDate) return nextGame.matchDate.toLocaleDateString(); if (typeof n === 'string' && n.trim()) { const d = new Date(n.trim()); return isNaN(d.getTime()) ? n.trim() : d.toLocaleDateString(); } return 'Date TBC'; })()} · {nextGame.location || 'Location TBC'}</Text>
               <Text mt={1} className={`tag ${nextGame.homeOrAway === 'home' ? 'status-win' : 'status-pending'}`}>
                 {nextGame.homeOrAway === 'home' ? 'Home' : 'Away'} fixture
               </Text>
@@ -100,6 +100,35 @@ const Home = () => {
           <HStack gap={4} mt={2}>
             <span className="badge role-captain">Wins: {loading ? '—' : totals.wins}</span>
             <span className="badge role-player">Losses: {loading ? '—' : totals.losses}</span>
+          </HStack>
+        </Box>
+
+        {/* Singles-only Win/Loss chart */}
+        <Box borderWidth="1px" borderRadius="lg" p={5} boxShadow="sm" bg="white" minH="220px">
+          <Heading as="h3" size="md" mb={2}>My Singles W/L</Heading>
+          <Box height="160px">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  dataKey="value"
+                  data={[
+                    { name: 'Singles Wins', value: singles.wins },
+                    { name: 'Singles Losses', value: singles.losses },
+                  ]}
+                  innerRadius={40}
+                  outerRadius={60}
+                  paddingAngle={2}
+                >
+                  <Cell fill="#0ea5e9" />
+                  <Cell fill="#f43f5e" />
+                </Pie>
+                <Tooltip formatter={(v) => String(v)} />
+              </PieChart>
+            </ResponsiveContainer>
+          </Box>
+          <HStack gap={4} mt={2}>
+            <span className="badge role-captain">Singles Wins: {loading ? '—' : singles.wins}</span>
+            <span className="badge role-player">Singles Losses: {loading ? '—' : singles.losses}</span>
           </HStack>
         </Box>
 
@@ -230,7 +259,7 @@ const Home = () => {
                 subsDueGames.map((g) => (
                   <Box key={g.id} borderWidth="1px" borderRadius="md" p={3}>
                     <Text fontWeight="semibold">{g.opponent}</Text>
-                    <Text color="gray.600">{g.matchDate ? g.matchDate.toLocaleDateString() : 'Date TBC'}</Text>
+                    <Text color="gray.600">{(() => { const n = (g as any).notes; if (g.matchDate) return g.matchDate.toLocaleDateString(); if (typeof n === 'string' && n.trim()) { const d = new Date(n.trim()); return isNaN(d.getTime()) ? n.trim() : d.toLocaleDateString(); } return 'Date TBC'; })()}</Text>
                   </Box>
                 ))
               )}

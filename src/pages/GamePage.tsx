@@ -264,7 +264,7 @@ const GamePage = () => {
       <section className="panel">
         <header>
           <h2>{game.opponent}</h2>
-          <p>{game.matchDate ? game.matchDate.toDate().toLocaleDateString() : 'Date TBC'} · {game.location || 'Location TBC'} · {game.homeOrAway === 'home' ? 'Home' : 'Away'}</p>
+          <p>{(() => { const n = game.notes; if (game.matchDate) return game.matchDate.toDate().toLocaleDateString(); if (typeof n === 'string' && n.trim()) { const d = new Date(n.trim()); return isNaN(d.getTime()) ? n.trim() : d.toLocaleDateString(); } return 'Date TBC'; })()} · {game.location || 'Location TBC'} · {game.homeOrAway === 'home' ? 'Home' : 'Away'}</p>
         </header>
         <div className="cards-responsive cards-2col">
         {/* Match Info */}
@@ -287,7 +287,7 @@ const GamePage = () => {
                   ) : null}
                 </HStack>
                 <Box mt={2}>
-                  <Text color="gray.700">Date: {game.matchDate ? game.matchDate.toDate().toLocaleDateString() : 'TBC'}</Text>
+                  <Text color="gray.700">Date: {(() => { const n = game.notes; if (game.matchDate) return game.matchDate.toDate().toLocaleDateString(); if (typeof n === 'string' && n.trim()) { const d = new Date(n.trim()); return isNaN(d.getTime()) ? n.trim() : d.toLocaleDateString(); } return 'TBC'; })()}</Text>
                   <Text color="gray.700">Location: {game.location || 'TBC'}</Text>
                 </Box>
               </>

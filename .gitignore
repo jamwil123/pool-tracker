@@ -7,6 +7,15 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 .env
+# Firebase Admin credentials (do NOT commit)
+pool-firebase-config.json
+firebase-admin.json
+serviceAccount.json
+*.serviceAccount.json
+*service-account*.json
+*serviceAccount*.json
+*.firebase-admin.json
+credentials/
 
 node_modules
 dist
@@ -23,5 +32,4 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-
 
