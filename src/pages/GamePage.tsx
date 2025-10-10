@@ -6,7 +6,7 @@ import { db } from '../firebase/config'
 import { useAuth } from '../context/AuthContext'
 import { isManagerRole } from '../types/models'
 import useGameTotalsForUser from '../hooks/useGameTotalsForUser'
-import { Button, Alert, Box, CloseButton, Text, HStack, Badge, ButtonGroup } from '@chakra-ui/react'
+import { Button, Alert, Box, CloseButton, Text, HStack, Badge, Stack } from '@chakra-ui/react'
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts'
 import { DialogRoot, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter, DialogCloseTrigger, DialogBackdrop, DialogPositioner } from '@chakra-ui/react'
 import type { SeasonGameDocument, SeasonGamePlayerStat, UserProfileDocument } from '../types/models'
@@ -366,19 +366,19 @@ const GamePage = () => {
           {myUid ? (
             <article className="card">
               <header className="card-header">
-                <HStack justify="space-between" align="center">
+                <Stack direction={{ base: 'column', sm: 'row' }} justify="space-between" align={{ base: 'start', sm: 'center' }} gap={2}>
                   <HStack gap={2} align="center">
                     <h3>My Match Breakdown</h3>
                     <Badge colorScheme={chartMode === 'all' ? 'blue' : chartMode === 'singles' ? 'cyan' : 'purple'} variant="solid" borderRadius="md">
                       {chartMode === 'all' ? 'ALL' : chartMode === 'singles' ? 'SINGLES' : 'DOUBLES'}
                     </Badge>
                   </HStack>
-                  <ButtonGroup size="xs" attached variant="outline">
-                    <Button colorScheme="blue" variant={chartMode === 'all' ? 'solid' : 'outline'} onClick={() => setChartMode('all')}>All</Button>
-                    <Button colorScheme="cyan" variant={chartMode === 'singles' ? 'solid' : 'outline'} onClick={() => setChartMode('singles')}>Singles</Button>
-                    <Button colorScheme="purple" variant={chartMode === 'doubles' ? 'solid' : 'outline'} onClick={() => setChartMode('doubles')}>Doubles</Button>
-                  </ButtonGroup>
-                </HStack>
+                  <HStack gap={2} style={{ flexWrap: 'wrap' }}>
+                    <Button size="xs" colorScheme="blue" variant={chartMode === 'all' ? 'solid' : 'outline'} onClick={() => setChartMode('all')}>All</Button>
+                    <Button size="xs" colorScheme="cyan" variant={chartMode === 'singles' ? 'solid' : 'outline'} onClick={() => setChartMode('singles')}>Singles</Button>
+                    <Button size="xs" colorScheme="purple" variant={chartMode === 'doubles' ? 'solid' : 'outline'} onClick={() => setChartMode('doubles')}>Doubles</Button>
+                  </HStack>
+                </Stack>
               </header>
               {(() => {
                 const allWins = myStats.sW + myStats.dW

@@ -1,7 +1,7 @@
 import { useAuth } from '../context/AuthContext'
 import { useState } from 'react'
 import useUserTotals from '../hooks/useUserTotals'
-import { Box, Heading, Text, HStack, SimpleGrid, Button, Stack, Spinner, Center, Badge, ButtonGroup } from '@chakra-ui/react'
+import { Box, Heading, Text, HStack, SimpleGrid, Button, Stack, Spinner, Center, Badge } from '@chakra-ui/react'
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts'
 import { Link as RouterLink } from 'react-router-dom'
 import { TEAM_NAME } from '../config/app'
@@ -77,7 +77,7 @@ const Home = () => {
 
         {/* Win/Loss chart with mode toggle */}
         <Box borderWidth="1px" borderRadius="lg" p={5} boxShadow="sm" bg="white" minH="220px">
-          <HStack justify="space-between" align="center" mb={3}>
+          <Stack direction={{ base: 'column', sm: 'row' }} justify="space-between" align={{ base: 'start', sm: 'center' }} mb={3} gap={2}>
             <HStack gap={2} align="center">
               <Heading as="h3" size="md">
                 {chartMode === 'all' ? 'My Wins vs Losses' : chartMode === 'singles' ? 'My Singles W/L' : 'My Doubles W/L'}
@@ -86,12 +86,12 @@ const Home = () => {
                 {chartMode === 'all' ? 'ALL' : chartMode === 'singles' ? 'SINGLES' : 'DOUBLES'}
               </Badge>
             </HStack>
-            <ButtonGroup size="xs" attached variant="outline">
-              <Button colorScheme="blue" variant={chartMode === 'all' ? 'solid' : 'outline'} onClick={() => setChartMode('all')}>All</Button>
-              <Button colorScheme="cyan" variant={chartMode === 'singles' ? 'solid' : 'outline'} onClick={() => setChartMode('singles')}>Singles</Button>
-              <Button colorScheme="purple" variant={chartMode === 'doubles' ? 'solid' : 'outline'} onClick={() => setChartMode('doubles')}>Doubles</Button>
-            </ButtonGroup>
-          </HStack>
+            <HStack gap={2} style={{ flexWrap: 'wrap' }}>
+              <Button size="xs" colorScheme="blue" variant={chartMode === 'all' ? 'solid' : 'outline'} onClick={() => setChartMode('all')}>All</Button>
+              <Button size="xs" colorScheme="cyan" variant={chartMode === 'singles' ? 'solid' : 'outline'} onClick={() => setChartMode('singles')}>Singles</Button>
+              <Button size="xs" colorScheme="purple" variant={chartMode === 'doubles' ? 'solid' : 'outline'} onClick={() => setChartMode('doubles')}>Doubles</Button>
+            </HStack>
+          </Stack>
           <Box height="160px">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
