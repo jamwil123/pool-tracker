@@ -86,7 +86,7 @@ const Home = () => {
                 {chartMode === 'all' ? 'ALL' : chartMode === 'singles' ? 'SINGLES' : 'DOUBLES'}
               </Badge>
             </HStack>
-            <ButtonGroup size="xs" isAttached variant="outline">
+            <ButtonGroup size="xs" attached variant="outline">
               <Button colorScheme="blue" variant={chartMode === 'all' ? 'solid' : 'outline'} onClick={() => setChartMode('all')}>All</Button>
               <Button colorScheme="cyan" variant={chartMode === 'singles' ? 'solid' : 'outline'} onClick={() => setChartMode('singles')}>Singles</Button>
               <Button colorScheme="purple" variant={chartMode === 'doubles' ? 'solid' : 'outline'} onClick={() => setChartMode('doubles')}>Doubles</Button>
