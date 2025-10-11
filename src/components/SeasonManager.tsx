@@ -1,33 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
-import {
-  Timestamp,
-  addDoc,
-  collection,
-  doc,
-  increment,
-  onSnapshot,
-  orderBy,
-  query,
-  runTransaction,
-  serverTimestamp,
-  updateDoc,
-  setDoc,
-  where,
-  limit,
-  getDocs,
-  getDoc,
-} from "firebase/firestore";
+import { Timestamp, addDoc, collection, onSnapshot, orderBy, query, serverTimestamp, where, limit } from "firebase/firestore";
 import { db } from "../firebase/config";
 import { isManagerRole } from "../types/models";
 import { TEAM_NAME } from "../config/app";
+import formatMatchDateLabel from '../utils/date'
+// strings util not needed here anymore
+import { getResultLabel, getResultTagClass } from '../utils/status'
 import { useAuth } from "../context/AuthContext";
-import type {
-  PlayerDocument,
-  SeasonGameDocument,
-  SeasonGamePlayerStat,
-  UserProfileDocument,
-} from "../types/models";
+import useSeasonActions from '../hooks/useSeasonActions'
+import { clamp } from '../utils/stats'
+import ImportFixturesPanel from './ImportFixturesPanel'
+import PlayerStatsEditor from './PlayerStatsEditor'
+import PlayerStatsSummary from './PlayerStatsSummary'
+import MatchForm from './MatchForm'
+import type { SeasonGameDocument, SeasonGamePlayerStat, UserProfileDocument } from "../types/models";
 
 type SeasonGame = SeasonGameDocument & { id: string };
 
@@ -69,7 +56,7 @@ const createRowId = () =>
     ? crypto.randomUUID()
     : `row-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-const clamp = (value: number, max: number) => Math.max(0, Math.min(max, value));
+// clamp moved to utils/stats
 
 const sanitizePlayerStats = (value: unknown): SeasonGamePlayerStat[] => {
   if (!Array.isArray(value)) return [];
@@ -115,46 +102,10 @@ const resolveUid = (profile: any | null | undefined): string | null => {
 };
 
 // --- import helpers ---
-const slugify = (s: string) =>
-  String(s || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
 
-type RawImportGame = Partial<SeasonGameDocument> & { notes?: string | null } & {
-  opponent?: string;
-  location?: string;
-  homeOrAway?: "home" | "away" | string;
-  matchDate?: string | null;
-};
+// RawImportGame type moved to utils/fixtures
 
-const parseYyyyMmDdToTimestamp20 = (s: string | null | undefined) => {
-  if (!s || typeof s !== 'string') return null as any
-  const t = s.trim()
-  if (!t) return null as any
-  const d = new Date(t)
-  if (Number.isNaN(d.getTime())) return null as any
-  const at20 = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 20, 0, 0, 0)
-  return Timestamp.fromDate(at20)
-}
-
-const normalizeImportGame = (row: RawImportGame): Omit<SeasonGameDocument, "createdAt" | "updatedAt"> => {
-  const opponent = typeof row.opponent === "string" ? row.opponent.trim() : "TBC";
-  const location = typeof row.location === "string" ? row.location.trim() : "";
-  const homeOrAway = row.homeOrAway === "away" ? "away" : "home";
-  const notes = typeof row.notes === "string" && row.notes.trim().length ? row.notes.trim() : null;
-  const players = Array.isArray(row.players) ? row.players : [];
-  const playerStats = sanitizePlayerStats(row.playerStats ?? []);
-  const result = row.result === "win" || row.result === "loss" ? row.result : "pending";
-  // Set matchDate at 20:00 local using matchDate string or notes fallback
-  const matchDate = row.matchDate ? parseYyyyMmDdToTimestamp20(row.matchDate as any) : parseYyyyMmDdToTimestamp20(notes as any);
-  return { opponent, matchDate, location, homeOrAway, players, playerStats, result, notes };
-};
-
-const buildStableMatchId = (g: Omit<SeasonGameDocument, "createdAt" | "updatedAt">) => {
-  const dateLabel = g.notes || (g.matchDate ? g.matchDate.toDate().toISOString().slice(0, 10) : "tbc");
-  return `match-${dateLabel}-${g.homeOrAway}-${slugify(g.opponent)}`;
-};
+// moved import helpers to utils/fixtures
 
 const SeasonManager = () => {
   const { profile } = useAuth();
@@ -175,6 +126,7 @@ const SeasonManager = () => {
   const [activeMatchId, setActiveMatchId] = useState<string | null>(null);
   const [rows, setRows] = useState<PlayerStatRow[]>([]);
   const [statsSubmitting, setStatsSubmitting] = useState(false);
+  
 
   // NEW: logged-in user's profile (to show wins/losses)
   const [myProfile, setMyProfile] = useState<UserProfileDocument | null>(null);
@@ -254,6 +206,8 @@ const SeasonManager = () => {
     return () => unsubscribe();
   }, []);
 
+  
+
   // NEW: subscribe to logged-in user's profile by uid field (auto-id docs)
   useEffect(() => {
     const uid = resolveUid(profile);
@@ -269,6 +223,8 @@ const SeasonManager = () => {
   }, [profile]);
 
   const canManageGames = useMemo(() => !!profile && isManagerRole(profile.role), [profile]);
+
+  
 
   // Upcoming = date >= now OR pending-without-date; sort soonest first, nulls last
   const upcomingGames = useMemo(() => {
@@ -309,39 +265,15 @@ const SeasonManager = () => {
   const visibleGames = filter === "upcoming" ? upcomingGames : previousGames;
 
   const formatDateLabel = (game: SeasonGame): string => {
-    if (game.matchDate instanceof Timestamp) return game.matchDate.toDate().toLocaleDateString();
-    const n = game.notes;
-    if (typeof n === 'string' && n.trim()) {
-      const d = new Date(n.trim());
-      if (!Number.isNaN(d.getTime())) return d.toLocaleDateString();
-      return n.trim();
-    }
-    return 'Date TBC';
+    return formatMatchDateLabel(game.matchDate, game.notes)
   };
 
-  const handleUpdateResult = async (gameId: string, result: "win" | "loss") => {
-    if (!canManageGames) return;
-
-    try {
-      const current = games.find((g) => g.id === gameId);
-      if (!current) throw new Error('Match not found');
-      if (current.result === 'pending') {
-        const decidedSnap = await getDocs(query(collection(db, 'games'), where('result', 'in', ['win', 'loss'])));
-        if (decidedSnap.size >= 13) {
-          setError('Season cap reached: 13 results already recorded.');
-          return;
-        }
-      }
-      const gameRef = doc(db, "games", gameId);
-      await updateDoc(gameRef, {
-        result,
-        updatedAt: serverTimestamp(),
-      });
-    } catch (updateError) {
-      console.error("Failed to update match result", updateError);
-      setError("Could not update the match result.");
-    }
-  };
+  const { updateResult, importFixtures, savePlayerStats } = useSeasonActions()
+  const handleUpdateResult = async (gameId: string, result: 'win' | 'loss') => {
+    if (!canManageGames) return
+    const out = await updateResult(gameId, result, games)
+    if (!out.ok) setError(out.error)
+  }
 
   const handleFormChange =
     (field: keyof MatchFormState) =>
@@ -395,43 +327,14 @@ const SeasonManager = () => {
   };
 
   const handleImportFixtures = async () => {
-    if (!canManageGames) return;
-    setImporting(true);
-    setImportMessage(null);
-    try {
-      const data = JSON.parse(importText) as RawImportGame[];
-      if (!Array.isArray(data)) throw new Error("Input must be a JSON array");
-
-      let created = 0;
-      let skipped = 0;
-      let updated = 0;
-
-      for (const row of data) {
-        const g = normalizeImportGame(row);
-        const id = buildStableMatchId(g);
-        const ref = doc(db, "games", id);
-        const snap = await getDoc(ref);
-        if (snap.exists()) {
-          // Skip if already exists to be safe
-          skipped++;
-          continue;
-        }
-        await setDoc(ref, {
-          ...g,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-        created++;
-      }
-
-      setImportMessage(`Import complete. Created: ${created}, Skipped: ${skipped}, Updated: ${updated}`);
-      setShowImporter(false);
-    } catch (err: any) {
-      console.error("Import failed", err);
-      setImportMessage(`Import failed: ${err?.message || String(err)}`);
-    } finally {
-      setImporting(false);
-    }
+    if (!canManageGames) return
+    setImporting(true)
+    setImportMessage(null)
+    const out = await importFixtures(importText)
+    setImporting(false)
+    if (!out.ok) { setImportMessage(`Import failed: ${out.error}`); return }
+    setImportMessage(`Import complete. Created: ${out.created}, Skipped: ${out.skipped}, Updated: ${out.updated}`)
+    setShowImporter(false)
   };
 
   const openPlayerStatsEditor = (game: SeasonGame) => {
@@ -537,139 +440,17 @@ const SeasonManager = () => {
     setRows((prev) => prev.filter((row) => row.rowId !== rowId));
   };
 
-  const handleSavePlayerStats = async (
-    event: FormEvent<HTMLFormElement>,
-    game: SeasonGame
-  ) => {
-    event.preventDefault();
-    if (!canManageGames) return;
-
-    if (playerOptions.length === 0) {
-      setError("No players available. Add players to the roster first.");
-      return;
-    }
-
-    const stats: SeasonGamePlayerStat[] = rows
-      .filter((row) => row.playerId.trim().length > 0)
-      .map((row) => {
-        const option = playerOptions.find(
-          (player) => player.id === row.playerId
-        );
-        return {
-          playerId: row.playerId,
-          displayName: option?.displayName ?? row.playerId,
-          singlesWins: clamp(row.singlesWins, MAX_SINGLES),
-          singlesLosses: clamp(row.singlesLosses, MAX_SINGLES),
-          doublesWins: clamp(row.doublesWins, MAX_DOUBLES),
-          doublesLosses: clamp(row.doublesLosses, MAX_DOUBLES),
-        };
-      });
-
-    setStatsSubmitting(true);
-    setError(null);
-
-    try {
-      await runTransaction(db, async (transaction) => {
-        const gameRef = doc(db, "games", game.id);
-        const gameSnapshot = await transaction.get(gameRef);
-        if (!gameSnapshot.exists()) {
-          throw new Error("Match not found");
-        }
-
-        const gameData = gameSnapshot.data() as SeasonGameDocument;
-        const previousStats = sanitizePlayerStats(gameData.playerStats ?? []);
-
-        const previousMap = new Map(
-          previousStats.map((stat) => [stat.playerId, stat])
-        );
-        const nextMap = new Map(stats.map((stat) => [stat.playerId, stat]));
-
-        const playersToUpdate = new Set<string>([
-          ...previousStats.map((stat) => stat.playerId),
-          ...stats.map((stat) => stat.playerId),
-        ]);
-
-        for (const playerId of playersToUpdate) {
-          const previous = previousMap.get(playerId);
-          const next = nextMap.get(playerId);
-
-          const previousWins = previous
-            ? previous.singlesWins + previous.doublesWins
-            : 0;
-          const previousLosses = previous
-            ? previous.singlesLosses + previous.doublesLosses
-            : 0;
-          const nextWins = next ? next.singlesWins + next.doublesWins : 0;
-          const nextLosses = next ? next.singlesLosses + next.doublesLosses : 0;
-
-          const winDiff = nextWins - previousWins;
-          const lossDiff = nextLosses - previousLosses;
-
-          if (winDiff === 0 && lossDiff === 0) continue;
-
-          // --- Update players doc (if it exists) ---
-          const playerRef = doc(db, "players", playerId);
-          const playerSnapshot = await transaction.get(playerRef);
-
-          let linkedProfileUid: string | undefined = undefined;
-
-          if (playerSnapshot.exists()) {
-            const playerUpdates: Record<string, unknown> = {
-              updatedAt: serverTimestamp(),
-            };
-            if (winDiff !== 0) playerUpdates.wins = increment(winDiff);
-            if (lossDiff !== 0) playerUpdates.losses = increment(lossDiff);
-            transaction.update(playerRef, playerUpdates);
-
-            const playerData = playerSnapshot.data() as PlayerDocument;
-            linkedProfileUid = playerData.linkedProfileUid ?? undefined;
-          }
-
-          // --- Update userProfiles totals ---
-          const profileTargets = new Set<string>();
-          if (linkedProfileUid) profileTargets.add(linkedProfileUid);
-          profileTargets.add(playerId); // fallback
-
-          for (const uid of profileTargets) {
-            const profileRef = doc(db, "userProfiles", uid);
-            transaction.set(
-              profileRef,
-              {
-                updatedAt: serverTimestamp(),
-                ...(winDiff !== 0 ? { totalWins: increment(winDiff) } : {}),
-                ...(lossDiff !== 0 ? { totalLosses: increment(lossDiff) } : {}),
-              },
-              { merge: true }
-            );
-          }
-        }
-
-        const uniquePlayers = Array.from(
-          new Set(stats.map((stat) => stat.displayName))
-        );
-
-        const uniquePlayerIds = Array.from(new Set(stats.map((s) => s.playerId)))
-        transaction.update(gameRef, {
-          playerStats: stats,
-          players: uniquePlayers,
-          playerIds: uniquePlayerIds,
-          updatedAt: serverTimestamp(),
-        });
-      });
-
-      setActiveMatchId(null);
-      setRows([]);
-    } catch (saveError) {
-      console.error("Failed to save player stats", saveError);
-      setError(
-        saveError instanceof Error
-          ? saveError.message
-          : "Unable to save player stats right now."
-      );
-    } finally {
-      setStatsSubmitting(false);
-    }
-  };
+  const handleSavePlayerStats = async (event: FormEvent<HTMLFormElement>, game: SeasonGame) => {
+    event.preventDefault()
+    if (!canManageGames) return
+    setStatsSubmitting(true)
+    setError(null)
+    const out = await savePlayerStats(game.id, rows, playerOptions)
+    setStatsSubmitting(false)
+    if (!out.ok) { setError(out.error); return }
+    setActiveMatchId(null)
+    setRows([])
+  }
 
   const myWins = myProfile?.totalWins ?? 0;
   const myLosses = myProfile?.totalLosses ?? 0;
@@ -700,6 +481,8 @@ const SeasonManager = () => {
         </div>
       )}
 
+      
+
       <div className="filter-bar">
         <div className="tab-group">
           <button
@@ -727,85 +510,28 @@ const SeasonManager = () => {
       {error ? <p className="error">{error}</p> : null}
 
       {canManageGames && showForm ? (
-        <form className="card" onSubmit={handleCreateMatch}>
-          <h3>Add Match</h3>
-          <label htmlFor="opponent">Team Name</label>
-          <input
-            id="opponent"
-            type="text"
-            value={formState.opponent}
-            onChange={handleFormChange("opponent")}
-            required
+        <div className="card">
+          <MatchForm
+            formState={formState}
+            onChange={handleFormChange}
+            submitting={submitting}
+            onSubmit={handleCreateMatch}
+            onCancel={resetMatchForm}
           />
-
-          <label htmlFor="matchDate">Match Date</label>
-          <input
-            id="matchDate"
-            type="date"
-            value={formState.matchDate}
-            onChange={handleFormChange("matchDate")}
-            required
-          />
-
-          <label htmlFor="location">Location</label>
-          <input
-            id="location"
-            type="text"
-            value={formState.location}
-            onChange={handleFormChange("location")}
-            placeholder="Club venue"
-            required
-          />
-
-          <label htmlFor="homeOrAway">Home or Away</label>
-          <select
-            id="homeOrAway"
-            value={formState.homeOrAway}
-            onChange={handleFormChange("homeOrAway")}
-          >
-            <option value="home">Home</option>
-            <option value="away">Away</option>
-          </select>
-
-          <div className="actions">
-            <button type="submit" disabled={submitting}>
-              {submitting ? "Saving…" : "Save Match"}
-            </button>
-            <button
-              type="button"
-              className="ghost-button"
-              onClick={resetMatchForm}
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
+        </div>
       ) : null}
 
       <div className="list">
         {canManageGames ? (
-          <div className="importer" style={{ marginBottom: 16 }}>
-            <button type="button" onClick={() => setShowImporter((v) => !v)} className="secondary-button">
-              {showImporter ? "Close Import Fixtures" : "Import Fixtures"}
-            </button>
-            {showImporter ? (
-              <div style={{ marginTop: 8 }}>
-                <p className="hint">Paste the fixtures JSON below and click Import. Your current sign-in will be used; no service account needed.</p>
-                <textarea
-                  value={importText}
-                  onChange={(e) => setImportText(e.target.value)}
-                  rows={10}
-                  style={{ width: "100%" }}
-                />
-                <div className="actions">
-                  <button type="button" onClick={handleImportFixtures} disabled={importing}>
-                    {importing ? "Importing…" : "Import"}
-                  </button>
-                </div>
-                {importMessage ? <p className={importMessage.startsWith('Import failed') ? 'error' : 'hint'}>{importMessage}</p> : null}
-              </div>
-            ) : null}
-          </div>
+          <ImportFixturesPanel
+            open={showImporter}
+            importText={importText}
+            setImportText={setImportText}
+            importing={importing}
+            importMessage={importMessage}
+            onImport={handleImportFixtures}
+            onToggle={() => setShowImporter((v) => !v)}
+          />
         ) : null}
         
         {visibleGames.length === 0 ? (
@@ -821,16 +547,12 @@ const SeasonManager = () => {
               <div>
                 <h3>{game.opponent}</h3>
                 <p>
-                  {formatDateLabel(game)}{" "}
+                {formatDateLabel(game)}{" "}
                   · {game.location || "Location TBC"}
                 </p>
               </div>
-              <span className={`tag status-${game.result}`}>
-                {game.result === "pending"
-                  ? "Pending"
-                  : game.result === "win"
-                  ? "Win"
-                  : "Loss"}
+              <span className={`tag ${getResultTagClass(game.result)}`}>
+                {getResultLabel(game.result)}
               </span>
             </header>
             <p className="meta">
@@ -838,23 +560,7 @@ const SeasonManager = () => {
             </p>
             {game.notes ? <p>{game.notes}</p> : null}
 
-            {game.playerStats.length > 0 ? (
-              <div className="player-stats-summary">
-                {game.playerStats.map((stat) => (
-                  <div key={stat.playerId} className="player-stat-chip">
-                    <strong>{stat.displayName}</strong>
-                    <span>
-                      Singles W/L {stat.singlesWins}:{stat.singlesLosses}
-                    </span>
-                    <span>
-                      Doubles W/L {stat.doublesWins}:{stat.doublesLosses}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="hint">No individual player results yet.</p>
-            )}
+            <PlayerStatsSummary stats={game.playerStats} canManage={canManageGames} />
 
             {canManageGames ? (
               <>
@@ -885,122 +591,20 @@ const SeasonManager = () => {
                     : "Record Player Results"}
                 </button>
                 {activeMatchId === game.id ? (
-                  <form
-                    className="player-result-form"
-                    onSubmit={(event) => handleSavePlayerStats(event, game)}
-                  >
-                    <div className="player-result-grid">
-                      {rows.map((row) => (
-                        <div key={row.rowId} className="player-result-row">
-                          <label>
-                            Player
-                            <select
-                              value={row.playerId}
-                              onChange={handlePlayerSelect(row.rowId)}
-                              disabled={playerOptions.length === 0}
-                            >
-                              <option value="">Select player…</option>
-                              {playerOptions.map((player) => (
-                                <option key={player.id} value={player.id}>
-                                  {player.displayName}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label>
-                            Singles Wins
-                            <input
-                              type="number"
-                              min={0}
-                              max={MAX_SINGLES}
-                              value={row.singlesWins}
-                              onChange={handleStatInput(
-                                row.rowId,
-                                "singlesWins",
-                                MAX_SINGLES
-                              )}
-                            />
-                          </label>
-                          <label>
-                            Singles Losses
-                            <input
-                              type="number"
-                              min={0}
-                              max={MAX_SINGLES}
-                              value={row.singlesLosses}
-                              onChange={handleStatInput(
-                                row.rowId,
-                                "singlesLosses",
-                                MAX_SINGLES
-                              )}
-                            />
-                          </label>
-                          <label>
-                            Doubles Wins
-                            <input
-                              type="number"
-                              min={0}
-                              max={MAX_DOUBLES}
-                              value={row.doublesWins}
-                              onChange={handleStatInput(
-                                row.rowId,
-                                "doublesWins",
-                                MAX_DOUBLES
-                              )}
-                            />
-                          </label>
-                          <label>
-                            Doubles Losses
-                            <input
-                              type="number"
-                              min={0}
-                              max={MAX_DOUBLES}
-                              value={row.doublesLosses}
-                              onChange={handleStatInput(
-                                row.rowId,
-                                "doublesLosses",
-                                MAX_DOUBLES
-                              )}
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            className="ghost-button"
-                            onClick={() => removeRow(row.rowId)}
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                    {playerOptions.length === 0 ? (
-                      <p className="hint">
-                        Add players to the roster to record results.
-                      </p>
-                    ) : null}
-                    <div className="actions">
-                      <button
-                        type="button"
-                        onClick={addRow}
-                        disabled={playerOptions.length === 0}
-                      >
-                        Add Player Result
-                      </button>
-                      <button type="submit" disabled={statsSubmitting}>
-                        {statsSubmitting ? "Saving…" : "Save Results"}
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={() => {
-                          setActiveMatchId(null);
-                          setRows([]);
-                        }}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </form>
+                  <PlayerStatsEditor
+                    rows={rows as any}
+                    playerOptions={playerOptions}
+                    getPlayerSelectHandler={handlePlayerSelect}
+                    getStatInputHandler={handleStatInput as any}
+                    onAddRow={addRow}
+                    onRemoveRow={removeRow}
+                    onSubmit={(e) => handleSavePlayerStats(e as any, game)}
+                    onCancel={() => { setActiveMatchId(null); setRows([]) }}
+                    submitting={statsSubmitting}
+                    canAdd={playerOptions.length > 0}
+                    MAX_SINGLES={MAX_SINGLES}
+                    MAX_DOUBLES={MAX_DOUBLES}
+                  />
                 ) : null}
               </>
             ) : null}

@@ -31,3 +31,4 @@ export const standingsProxy = onRequest(async (req, res) => {
   }
 })
 
+// Batch create users (captain-only)

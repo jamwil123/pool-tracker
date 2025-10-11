@@ -1,24 +1,33 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import type { ChangeEvent, FormEvent } from 'react'
-import { collection, doc, increment, onSnapshot, orderBy, query, runTransaction, serverTimestamp, where, limit } from 'firebase/firestore'
+import { doc, increment, runTransaction, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuth } from '../context/AuthContext'
 import { isManagerRole } from '../types/models'
 import useGameTotalsForUser from '../hooks/useGameTotalsForUser'
 import { Button, Alert, Box, CloseButton, Text, HStack, Badge, Stack } from '@chakra-ui/react'
+import { clamp } from '../utils/stats'
+import { getResultLabel, getResultTagClass } from '../utils/status'
+import formatMatchDateLabel from '../utils/date'
+import usePersistentState from '../hooks/usePersistentState'
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts'
+import ModeToggle from '../components/ModeToggle'
 import { DialogRoot, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter, DialogCloseTrigger, DialogBackdrop, DialogPositioner } from '@chakra-ui/react'
-import type { SeasonGameDocument, SeasonGamePlayerStat, UserProfileDocument } from '../types/models'
+import useUserProfileByUid from '../hooks/useUserProfileByUid'
+import useUserProfilesOptions from '../hooks/useUserProfilesOptions'
+import useGameById from '../hooks/useGameById'
+import PlayerStatsSummary from '../components/PlayerStatsSummary'
+import type { SeasonGameDocument, SeasonGamePlayerStat } from '../types/models'
 
-type SeasonGame = SeasonGameDocument & { id: string }
+// type SeasonGame = SeasonGameDocument & { id: string }
 type PlayerOption = { id: string; displayName: string }
 type PlayerStatRow = { rowId: string; playerId: string; singlesWins: number; singlesLosses: number; doublesWins: number; doublesLosses: number; subsPaid: boolean; error?: string }
 
 const MAX_SINGLES = 2
 const MAX_DOUBLES = 1
 
-const clamp = (v: number, m: number) => Math.max(0, Math.min(m, v))
+// clamp from utils/stats
 const createRowId = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `row-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
 
 const GamePage = () => {
@@ -26,7 +35,7 @@ const GamePage = () => {
   const gameId = params.id as string
   const { profile, user } = useAuth()
 
-  const [game, setGame] = useState<SeasonGame | null>(null)
+  const { game, loading: gameLoading } = useGameById(gameId)
   const [playerOptions, setPlayerOptions] = useState<PlayerOption[]>([])
   const [rows, setRows] = useState<PlayerStatRow[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -61,59 +70,31 @@ const GamePage = () => {
     }
   }, [game, myUid, myProfileId])
 
-  const [chartMode, setChartMode] = useState<'all' | 'singles' | 'doubles'>('all')
+  const [chartMode, setChartMode] = usePersistentState<'all' | 'singles' | 'doubles'>('gameChartMode', 'all')
 
   const canManage = useMemo(() => !!profile && isManagerRole(profile.role), [profile])
 
-  useEffect(() => {
-    // Resolve the user's profile auto-id so we can match stats saved with profileId
-    if (!myUid) { setMyProfileId(null); return }
-    const q = query(collection(db, 'userProfiles'), where('uid', '==', myUid), limit(1))
-    const unsub = onSnapshot(q, (snap) => {
-      if (!snap.empty) setMyProfileId(snap.docs[0].id)
-      else setMyProfileId(null)
-    })
-    return () => unsub()
-  }, [myUid])
+  const { profileId: resolvedProfileId } = useUserProfileByUid(myUid)
+  useEffect(() => { setMyProfileId(resolvedProfileId ?? null) }, [resolvedProfileId])
 
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'games', gameId), (snap) => {
-      if (!snap.exists()) {
-        setGame(null)
-        return
-      }
-      const data = snap.data() as SeasonGameDocument
-      setGame({ id: snap.id, ...data })
-      setRows(
-        (data.playerStats ?? []).map((s) => ({
-          rowId: createRowId(),
-          playerId: s.playerId,
-          singlesWins: clamp(Number(s.singlesWins ?? 0), MAX_SINGLES),
-          singlesLosses: clamp(Number(s.singlesLosses ?? 0), MAX_SINGLES),
-          doublesWins: clamp(Number(s.doublesWins ?? 0), MAX_DOUBLES),
-          doublesLosses: clamp(Number(s.doublesLosses ?? 0), MAX_DOUBLES),
-          subsPaid: Boolean((s as any).subsPaid) || false,
-        })),
-      )
-    })
-    return () => unsub()
-  }, [gameId])
-
-  useEffect(() => {
-    const profilesQuery = query(collection(db, 'userProfiles'), orderBy('displayName', 'asc'))
-    const unsub = onSnapshot(
-      profilesQuery,
-      (snap) => {
-        const opts: PlayerOption[] = snap.docs.map((d) => {
-          const data = d.data() as UserProfileDocument
-          return { id: d.id, displayName: data.displayName }
-        })
-        setPlayerOptions(opts)
-      },
-      (e) => console.error('Failed to load user profiles', e),
+    if (!game) { setRows([]); return }
+    const data = game as SeasonGameDocument
+    setRows(
+      (data.playerStats ?? []).map((s) => ({
+        rowId: createRowId(),
+        playerId: s.playerId,
+        singlesWins: clamp(Number(s.singlesWins ?? 0), MAX_SINGLES),
+        singlesLosses: clamp(Number(s.singlesLosses ?? 0), MAX_SINGLES),
+        doublesWins: clamp(Number(s.doublesWins ?? 0), MAX_DOUBLES),
+        doublesLosses: clamp(Number(s.doublesLosses ?? 0), MAX_DOUBLES),
+        subsPaid: Boolean((s as any).subsPaid) || false,
+      })),
     )
-    return () => unsub()
-  }, [])
+  }, [game])
+
+  const { options: profileOptions } = useUserProfilesOptions()
+  useEffect(() => { setPlayerOptions(profileOptions) }, [profileOptions])
 
   const updateRow = (rowId: string, updates: Partial<PlayerStatRow>) =>
     setRows((prev) => prev.map((r) => (r.rowId === rowId ? { ...r, ...updates } : r)))
@@ -271,7 +252,7 @@ const GamePage = () => {
   }
 
   if (!game) return (
-    <main className="container"><p>Loading match…</p></main>
+    <main className="container"><p>{gameLoading ? 'Loading match…' : 'Match not found.'}</p></main>
   )
 
   return (
@@ -279,7 +260,7 @@ const GamePage = () => {
       <section className="panel">
         <header>
           <h2>{game.opponent}</h2>
-          <p>{(() => { const n = game.notes; if (game.matchDate) return game.matchDate.toDate().toLocaleDateString(); if (typeof n === 'string' && n.trim()) { const d = new Date(n.trim()); return isNaN(d.getTime()) ? n.trim() : d.toLocaleDateString(); } return 'Date TBC'; })()} · {game.location || 'Location TBC'} · {game.homeOrAway === 'home' ? 'Home' : 'Away'}</p>
+          <p>{formatMatchDateLabel(game.matchDate, game.notes)} · {game.location || 'Location TBC'} · {game.homeOrAway === 'home' ? 'Home' : 'Away'}</p>
         </header>
         <div className="cards-responsive cards-2col">
         {/* Match Info */}
@@ -291,8 +272,8 @@ const GamePage = () => {
             return (
               <>
                 <HStack gap={2} wrap="wrap" style={{ marginTop: 4 }}>
-                  <span className={`tag status-${game.result}`}>
-                    {game.result === 'pending' ? 'Pending' : game.result === 'win' ? 'Win' : 'Loss'}
+                  <span className={`tag ${getResultTagClass(game.result)}`}>
+                    {getResultLabel(game.result)}
                   </span>
                   <span className="tag">{game.homeOrAway === 'home' ? 'Home' : 'Away'}</span>
                   {showSubsDue ? (
@@ -302,7 +283,7 @@ const GamePage = () => {
                   ) : null}
                 </HStack>
                 <Box mt={2}>
-                  <Text color="gray.700">Date: {(() => { const n = game.notes; if (game.matchDate) return game.matchDate.toDate().toLocaleDateString(); if (typeof n === 'string' && n.trim()) { const d = new Date(n.trim()); return isNaN(d.getTime()) ? n.trim() : d.toLocaleDateString(); } return 'TBC'; })()}</Text>
+                  <Text color="gray.700">Date: {formatMatchDateLabel(game.matchDate, game.notes, 'TBC')}</Text>
                   <Text color="gray.700">Location: {game.location || 'TBC'}</Text>
                 </Box>
               </>
@@ -344,22 +325,7 @@ const GamePage = () => {
                 </button>
               ) : null}
             </header>
-            {game.playerStats?.length ? (
-              <div id="player-results-panel" className="player-stats-summary">
-                {(game.playerStats).map((s) => (
-                  (canManage || s.playerId === myUid || (myProfileId && s.playerId === myProfileId)) ? (
-                    <div key={s.playerId} className="player-stat-chip">
-                      <strong>{s.displayName}</strong>
-                      <span>Singles W/L {s.singlesWins}:{s.singlesLosses}</span>
-                      <span>Doubles W/L {s.doublesWins}:{s.doublesLosses}</span>
-                      <span className={`tag ${s.subsPaid ? 'subs-paid' : 'subs-due'}`}>Subs {s.subsPaid ? 'Paid' : 'Due'}</span>
-                    </div>
-                  ) : null
-                ))}
-              </div>
-            ) : (
-              <p className="hint" id="player-results-panel">No player results yet.</p>
-            )}
+            <PlayerStatsSummary stats={game.playerStats || []} canManage={canManage} myUid={myUid} myProfileId={myProfileId} />
           </article>
 
           {/* My Match Breakdown chart with mode toggle */}
@@ -373,11 +339,7 @@ const GamePage = () => {
                       {chartMode === 'all' ? 'ALL' : chartMode === 'singles' ? 'SINGLES' : 'DOUBLES'}
                     </Badge>
                   </HStack>
-                  <HStack gap={2} style={{ flexWrap: 'wrap' }}>
-                    <Button size="xs" colorScheme="blue" variant={chartMode === 'all' ? 'solid' : 'outline'} onClick={() => setChartMode('all')}>All</Button>
-                    <Button size="xs" colorScheme="cyan" variant={chartMode === 'singles' ? 'solid' : 'outline'} onClick={() => setChartMode('singles')}>Singles</Button>
-                    <Button size="xs" colorScheme="purple" variant={chartMode === 'doubles' ? 'solid' : 'outline'} onClick={() => setChartMode('doubles')}>Doubles</Button>
-                  </HStack>
+                  <ModeToggle value={chartMode} onChange={(m) => setChartMode(m)} />
                 </Stack>
               </header>
               {(() => {

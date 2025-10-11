@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Timestamp, addDoc, collection, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc, getDocs, where, deleteDoc } from 'firebase/firestore'
+import { Timestamp, addDoc, collection, doc, serverTimestamp, updateDoc, getDocs, where, deleteDoc, query } from 'firebase/firestore'
 import type { ChangeEvent, FormEvent } from 'react'
 import { Link as RouterLink } from 'react-router-dom'
 import { db } from '../firebase/config'
@@ -7,7 +7,13 @@ import { useAuth } from '../context/AuthContext'
 import { isManagerRole } from '../types/models'
 import type { SeasonGameDocument } from '../types/models'
 import { Box, Heading, Text, HStack, Button, SimpleGrid, Input } from '@chakra-ui/react'
+import formatMatchDateLabel from '../utils/date'
+import usePersistentState from '../hooks/usePersistentState'
+import useGames from '../hooks/useGames'
+import { classifyMatch, sortByPrevious } from '../utils/games'
 import { TEAM_NAME } from '../config/app'
+import MatchCard from '../components/MatchCard'
+import MatchInlineEdit from '../components/MatchInlineEdit'
 
 type SeasonGame = SeasonGameDocument & { id: string }
 type MatchFilter = 'upcoming' | 'previous'
@@ -15,28 +21,12 @@ type MatchFormState = { opponent: string; matchDate: string; location: string; h
 
 const defaultFormState: MatchFormState = { opponent: '', matchDate: '', location: '', homeOrAway: 'home' }
 
-const classify = (game: SeasonGame): MatchFilter => {
-  // If a result has been recorded, treat as previous
-  if (game.result === 'win' || game.result === 'loss') return 'previous'
-
-  // Pending results: keep in Upcoming through the entire match day
-  const dt = game.matchDate instanceof Timestamp ? game.matchDate.toDate() : null
-  if (!dt) return 'upcoming'
-
-  const now = new Date()
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
-  // If the date is before today, it's previous; otherwise it's upcoming (today or future)
-  return dt.getTime() < startOfToday.getTime() ? 'previous' : 'upcoming'
-}
+// classification handled by utils/games
 
 const GamesList = () => {
   const { profile } = useAuth()
-  const [games, setGames] = useState<SeasonGame[]>([])
-  const [filter, setFilter] = useState<MatchFilter>(() => {
-    if (typeof window === 'undefined') return 'upcoming'
-    const saved = window.localStorage.getItem('gamesTab') as MatchFilter | null
-    return saved === 'previous' || saved === 'upcoming' ? saved : 'upcoming'
-  })
+  const { games, error: loadError } = useGames()
+  const [filter, setFilter] = usePersistentState<MatchFilter>('gamesTab', 'upcoming')
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [formState, setFormState] = useState<MatchFormState>(defaultFormState)
@@ -50,37 +40,13 @@ const GamesList = () => {
 
   const canManage = useMemo(() => !!profile && isManagerRole(profile.role), [profile])
 
-  useEffect(() => {
-    const q = query(collection(db, 'games'), orderBy('matchDate', 'asc'))
-    const unsub = onSnapshot(q, (snap) => {
-      const rows: SeasonGame[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as SeasonGameDocument) }))
-      setGames(rows)
-      setError(null)
-    }, (e) => {
-      console.error(e)
-      setError('Unable to load matches right now.')
-    })
-    return () => unsub()
-  }, [])
+  useEffect(() => { if (loadError) setError(loadError) }, [loadError])
 
-  // Persist selected tab across navigations
-  useEffect(() => {
-    try { window.localStorage.setItem('gamesTab', filter) } catch {}
-  }, [filter])
+  // persistence handled by usePersistentState
 
-  const toMillis = (g: SeasonGame) => g.matchDate instanceof Timestamp ? g.matchDate.toMillis() : null
-  const upcoming = games.filter((g) => classify(g) === 'upcoming')
-  const previous = games.filter((g) => classify(g) === 'previous')
-  const previousSorted = [...previous].sort((a, b) => {
-    const ta = toMillis(a)
-    const tb = toMillis(b)
-    if (ta !== null && tb !== null) return tb - ta // newest first
-    if (ta === null && tb !== null) return 1 // nulls last
-    if (ta !== null && tb === null) return -1
-    const ua = (a as any).updatedAt instanceof Timestamp ? (a as any).updatedAt.toMillis() : 0
-    const ub = (b as any).updatedAt instanceof Timestamp ? (b as any).updatedAt.toMillis() : 0
-    return ub - ua
-  })
+  const upcoming = games.filter((g) => classifyMatch(g) === 'upcoming')
+  const previous = games.filter((g) => classifyMatch(g) === 'previous')
+  const previousSorted = sortByPrevious(previous)
   const visible = filter === 'upcoming' ? upcoming : previousSorted
 
   const onChange = (field: keyof MatchFormState) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -108,17 +74,7 @@ const GamesList = () => {
     setEditingNotes((g as any).notes || '')
   }
 
-  const formatDateLabel = (g: SeasonGame): string => {
-    if (g.matchDate instanceof Timestamp) return g.matchDate.toDate().toLocaleDateString()
-    const n = (g as any).notes as string | null | undefined
-    if (typeof n === 'string' && n.trim()) {
-      // Try to parse YYYY-MM-DD in notes
-      const d = new Date(n.trim())
-      if (!Number.isNaN(d.getTime())) return d.toLocaleDateString()
-      return n.trim()
-    }
-    return 'Date TBC'
-  }
+  // date formatting handled via utils/date
 
   const cancelEdit = () => {
     setEditingId(null)
@@ -154,7 +110,7 @@ const GamesList = () => {
   const deleteMatch = async (id: string) => {
     if (!canManage) return
     const g = games.find((x) => x.id === id)
-    const label = g ? `${g.opponent} (${formatDateLabel(g)})` : id
+    const label = g ? `${g.opponent} (${formatMatchDateLabel(g.matchDate, (g as any).notes)})` : id
     const ok = window.confirm(`Delete match ${label}? This cannot be undone.`)
     if (!ok) return
     setDeletingId(id)
@@ -230,8 +186,8 @@ const GamesList = () => {
           Browse fixtures and open a match to manage results.
         </Text>
       </Box>
-      <HStack justify="space-between" mb={3} style={{ flexWrap: 'wrap' }} gap={2}>
-        <HStack gap={2}>
+      <HStack justify="space-between" mb={3} wrap="wrap" gap={2}>
+        <HStack gap={2} wrap="wrap">
           <Button
             size="sm"
             variant={filter === 'upcoming' ? 'solid' : 'outline'}
@@ -302,107 +258,31 @@ const GamesList = () => {
               if (canManage && editingId === g.id) e.preventDefault()
             }}
           >
-            <Box
-              borderWidth="1px"
-              borderRadius="lg"
-              p={4}
-              bg="white"
-              boxShadow="sm"
-              _hover={{ boxShadow: 'md', transform: 'translateY(-2px)' }}
-              role="button"
-            >
-              <HStack justify="space-between" align="start">
-                <Box>
-                  <Heading as="h3" size="sm" mb={1}>{g.opponent}</Heading>
-                  <Text color="gray.600">{formatDateLabel(g)} · {g.location || 'Location TBC'}</Text>
-                </Box>
-                <Box className={`tag status-${g.result}`}>
-                  {g.result === 'pending' ? 'Pending' : g.result === 'win' ? 'Win' : 'Loss'}
-                </Box>
-              </HStack>
-              <Text mt={2} color="gray.700">{g.homeOrAway === 'home' ? 'Home' : 'Away'} fixture</Text>
-              {canManage ? (
-                <HStack mt={3} gap={2} wrap="wrap">
-                  <Button
-                    size={{ base: 'xs', sm: 'sm' }}
-                    onClick={(e) => { e.preventDefault(); if (canSetResult) setResult(g.id, 'win') }}
-                    disabled={!canSetResult}
-                    title={canSetResult ? '' : 'Results can be set on or after match day'}
-                  >
-                    Mark Win
-                  </Button>
-                  <Button
-                    size={{ base: 'xs', sm: 'sm' }}
-                    variant="outline"
-                    onClick={(e) => { e.preventDefault(); if (canSetResult) setResult(g.id, 'loss') }}
-                    disabled={!canSetResult}
-                    title={canSetResult ? '' : 'Results can be set on or after match day'}
-                  >
-                    Mark Loss
-                  </Button>
-                  <Button size={{ base: 'xs', sm: 'sm' }} variant="ghost" onClick={(e) => { e.preventDefault(); openEdit(g) }}>Edit</Button>
-                  <Button
-                    size={{ base: 'xs', sm: 'sm' }}
-                    colorScheme="red"
-                    variant="outline"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteMatch(g.id) }}
-                    loading={deletingId === g.id}
-                  >
-                    Delete
-                  </Button>
-                </HStack>
-              ) : null}
-
+            <>
+              <MatchCard
+                game={g}
+                dateLabel={formatMatchDateLabel(g.matchDate, (g as any).notes)}
+                canManage={canManage}
+                canSetResult={canSetResult}
+                deleting={deletingId === g.id}
+                isEditing={editingId === g.id}
+                onMarkWin={() => setResult(g.id, 'win')}
+                onMarkLoss={() => setResult(g.id, 'loss')}
+                onEdit={() => openEdit(g)}
+                onDelete={() => deleteMatch(g.id)}
+              />
               {canManage && editingId === g.id ? (
-                <Box
-                  mt={3}
-                  borderWidth="1px"
-                  borderRadius="md"
-                  p={3}
-                  bg="white"
-                >
-                  <form onSubmit={(e) => saveEdit(e, g.id)}>
-                    <HStack gap={2} wrap="wrap">
-                      <Box flex="1 1 220px">
-                        <Text fontSize="sm" mb={1}>Team Name</Text>
-                        <Input value={editingState.opponent} onChange={(e) => setEditingState((s) => ({ ...s, opponent: e.target.value }))} required />
-                      </Box>
-                      <Box flex="1 1 160px">
-                        <Text fontSize="sm" mb={1}>Match Date</Text>
-                        <Input type="date" value={editingState.matchDate} onChange={(e) => setEditingState((s) => ({ ...s, matchDate: e.target.value }))} />
-                      </Box>
-                      <Box flex="1 1 180px">
-                        <Text fontSize="sm" mb={1}>Location</Text>
-                        <Input value={editingState.location} onChange={(e) => setEditingState((s) => ({ ...s, location: e.target.value }))} />
-                      </Box>
-                      <Box flex="0 1 140px">
-                        <Text fontSize="sm" mb={1}>Home/Away</Text>
-                        <select value={editingState.homeOrAway} onChange={(e) => setEditingState((s) => ({ ...s, homeOrAway: e.target.value as 'home' | 'away' }))}>
-                          <option value="home">Home</option>
-                          <option value="away">Away</option>
-                        </select>
-                      </Box>
-                      <Box flex="1 1 100%">
-                        <Text fontSize="sm" mb={1}>Notes</Text>
-                        <Input value={editingNotes} onChange={(e) => setEditingNotes(e.target.value)} placeholder="Optional notes" />
-                      </Box>
-                    </HStack>
-                    <HStack mt={3}>
-                      <Button type="submit" colorScheme="blue" loading={editingSaving} loadingText="Saving">
-                        Save
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); cancelEdit() }}
-                      >
-                        Cancel
-                      </Button>
-                    </HStack>
-                  </form>
-                </Box>
+                <MatchInlineEdit
+                  value={editingState}
+                  notes={editingNotes}
+                  onFieldChange={(field, value) => setEditingState((s) => ({ ...s, [field]: field === 'homeOrAway' ? (value as 'home' | 'away') : value }))}
+                  onNotesChange={(v) => setEditingNotes(v)}
+                  submitting={editingSaving}
+                  onSubmit={(e) => saveEdit(e, g.id)}
+                  onCancel={() => cancelEdit()}
+                />
               ) : null}
-            </Box>
+            </>
           </RouterLink>
         )})}
         {visible.length === 0 ? <Text>No matches.</Text> : null}

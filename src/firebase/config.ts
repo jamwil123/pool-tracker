@@ -21,12 +21,12 @@ const requiredEnvVars: Array<keyof FirebaseConfig> = [
 ]
 
 const firebaseConfig: FirebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  apiKey: (import.meta as any).env?.VITE_FIREBASE_API_KEY,
+  authDomain: (import.meta as any).env?.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: (import.meta as any).env?.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: (import.meta as any).env?.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: (import.meta as any).env?.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: (import.meta as any).env?.VITE_FIREBASE_APP_ID,
 }
 
 for (const key of requiredEnvVars) {
@@ -34,6 +34,8 @@ for (const key of requiredEnvVars) {
     console.warn(`Missing Firebase configuration value for ${key}`)
   }
 }
+
+export const FIREBASE_ENV = { mode: 'prod' as const, projectId: firebaseConfig.projectId }
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig)
 

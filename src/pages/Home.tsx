@@ -6,6 +6,9 @@ import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts'
 import { Link as RouterLink } from 'react-router-dom'
 import { TEAM_NAME } from '../config/app'
 import useStandings from '../hooks/useStandings'
+import ModeToggle from '../components/ModeToggle'
+import formatMatchDateLabel from '../utils/date'
+import usePersistentState from '../hooks/usePersistentState'
 
 const Home = () => {
   const { user, profile } = useAuth()
@@ -13,7 +16,7 @@ const Home = () => {
   const { loading, totals, singles, subsDueCount, subsDueGames, nextGame } = useUserTotals(uid)
   const standings = useStandings()
   const [isDialogOpen, setDialogOpen] = useState(false)
-  const [chartMode, setChartMode] = useState<'all' | 'singles' | 'doubles'>('all')
+  const [chartMode, setChartMode] = usePersistentState<'all' | 'singles' | 'doubles'>('homeChartMode', 'all')
   const onOpen = () => setDialogOpen(true)
   const onClose = () => setDialogOpen(false)
 
@@ -65,7 +68,7 @@ const Home = () => {
           {nextGame ? (
             <>
               <Text fontWeight="medium">{nextGame.opponent}</Text>
-              <Text color="gray.600" mt={1}>{(() => { const n = (nextGame as any).notes; if (nextGame.matchDate) return nextGame.matchDate.toLocaleDateString(); if (typeof n === 'string' && n.trim()) { const d = new Date(n.trim()); return isNaN(d.getTime()) ? n.trim() : d.toLocaleDateString(); } return 'Date TBC'; })()} · {nextGame.location || 'Location TBC'}</Text>
+              <Text color="gray.600" mt={1}>{formatMatchDateLabel(nextGame.matchDate, (nextGame as any).notes)} · {nextGame.location || 'Location TBC'}</Text>
               <Text mt={1} className={`tag ${nextGame.homeOrAway === 'home' ? 'status-win' : 'status-pending'}`}>
                 {nextGame.homeOrAway === 'home' ? 'Home' : 'Away'} fixture
               </Text>
@@ -86,11 +89,7 @@ const Home = () => {
                 {chartMode === 'all' ? 'ALL' : chartMode === 'singles' ? 'SINGLES' : 'DOUBLES'}
               </Badge>
             </HStack>
-            <HStack gap={2} style={{ flexWrap: 'wrap' }}>
-              <Button size="xs" colorScheme="blue" variant={chartMode === 'all' ? 'solid' : 'outline'} onClick={() => setChartMode('all')}>All</Button>
-              <Button size="xs" colorScheme="cyan" variant={chartMode === 'singles' ? 'solid' : 'outline'} onClick={() => setChartMode('singles')}>Singles</Button>
-              <Button size="xs" colorScheme="purple" variant={chartMode === 'doubles' ? 'solid' : 'outline'} onClick={() => setChartMode('doubles')}>Doubles</Button>
-            </HStack>
+            <ModeToggle value={chartMode} onChange={(m) => setChartMode(m)} />
           </Stack>
           <Box height="160px">
             <ResponsiveContainer width="100%" height="100%">
@@ -269,7 +268,7 @@ const Home = () => {
                 subsDueGames.map((g) => (
                   <Box key={g.id} borderWidth="1px" borderRadius="md" p={3}>
                     <Text fontWeight="semibold">{g.opponent}</Text>
-                    <Text color="gray.600">{(() => { const n = (g as any).notes; if (g.matchDate) return g.matchDate.toLocaleDateString(); if (typeof n === 'string' && n.trim()) { const d = new Date(n.trim()); return isNaN(d.getTime()) ? n.trim() : d.toLocaleDateString(); } return 'Date TBC'; })()}</Text>
+                    <Text color="gray.600">{formatMatchDateLabel(g.matchDate, (g as any).notes)}</Text>
                   </Box>
                 ))
               )}

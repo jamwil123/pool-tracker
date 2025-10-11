@@ -41,6 +41,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     let unsubscribeProfile: (() => void) | null = null
+    
 
     const unsubscribeAuth = onAuthStateChanged(auth, (authUser) => {
       if (unsubscribeProfile) {
