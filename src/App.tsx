@@ -10,7 +10,6 @@ const CaptainsDashboardLazy = lazy(() => import('./pages/CaptainsDashboard'))
 // const SetupWizard = lazy(() => import('./pages/SetupWizard'))
 import { Box, Container, Flex, Heading, Text, Button, HStack, Badge } from '@chakra-ui/react'
 import { APP_TITLE, TEAM_NAME } from './config/app'
-import { FIREBASE_ENV } from './firebase/config'
 import { ROLES, type Role } from './types/models'
 // import ProfileSetup from './components/ProfileSetup'
 import { isManagerRole } from './types/models'
@@ -81,7 +80,6 @@ const AppShell = () => {
               <Route path="/games" element={<GamesList />} />
               <Route path="/games/:id" element={<GamePage />} />
               <Route path="/dashboard" element={(profile && isManagerRole(profile.role)) ? <CaptainsDashboardLazy /> : <Navigate to="/" replace />} />
-              <Route path="/setup" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>
         </Box>
