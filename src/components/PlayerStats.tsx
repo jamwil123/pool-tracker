@@ -329,7 +329,7 @@ const PlayerStats = () => {
                 <option value="captain">Captain</option>
               </select>
               <Text className="hint">Creates a roster entry in users.</Text>
-              <Button type="submit" isLoading={submitting}>Add Player</Button>
+              <Button type="submit" loading={submitting}>Add Player</Button>
             </form>
           ) : (
             <Text className="hint">Use the button to add a new squad member.</Text>

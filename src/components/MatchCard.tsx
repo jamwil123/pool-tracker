@@ -64,7 +64,7 @@ const MatchCard = ({ game, dateLabel, canManage, canSetResult, deleting, isEditi
             colorScheme="red"
             variant="outline"
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete() }}
-            isLoading={deleting}
+            loading={deleting}
           >
             Delete
           </Button>

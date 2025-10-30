@@ -456,7 +456,7 @@ const GamePage = () => {
           </DialogBody>
           <DialogFooter style={{ position: 'sticky', bottom: 0, background: 'white', zIndex: 2 }}>
             <Button onClick={() => setShowEditorModal(false)} variant="ghost" style={{ marginRight: '0.75rem' }}>Cancel</Button>
-            <Button colorScheme="blue" onClick={(e) => save(e as unknown as FormEvent<HTMLFormElement>)} isLoading={submitting}>Save Results</Button>
+            <Button colorScheme="blue" onClick={(e) => save(e as unknown as FormEvent<HTMLFormElement>)} loading={submitting}>Save Results</Button>
           </DialogFooter>
         </DialogContent>
       </DialogPositioner>

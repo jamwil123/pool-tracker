@@ -48,7 +48,7 @@ const MatchInlineEdit = ({ value, notes, onFieldChange, onNotesChange, submittin
           </Box>
         </HStack>
         <HStack mt={3}>
-          <Button type="submit" colorScheme="blue" isLoading={submitting} loadingText="Saving">
+          <Button type="submit" colorScheme="blue" loading={submitting} loadingText="Saving">
             Save
           </Button>
           <Button type="button" variant="ghost" onClick={onCancel}>

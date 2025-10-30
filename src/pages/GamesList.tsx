@@ -232,7 +232,7 @@ const GamesList = () => {
             <option value="away">Away</option>
           </select>
           <HStack mt={3}>
-            <Button type="submit" isLoading={submitting} colorScheme="blue">Save Match</Button>
+            <Button type="submit" loading={submitting} colorScheme="blue">Save Match</Button>
             <Button variant="ghost" onClick={reset} type="button">Cancel</Button>
           </HStack>
           </form>
