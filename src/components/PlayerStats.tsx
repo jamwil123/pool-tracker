@@ -27,6 +27,7 @@ import { useAuth } from "../context/AuthContext";
 import { Box, Heading, Text, Button, Input } from '@chakra-ui/react'
 import { isManagerRole } from '../types/models'
 import type { PlayerDocument, Role, RosterDocument } from "../types/models";
+import { slugify } from '../utils/strings'
 
 type PlayerRecord = PlayerDocument & { id: string };
 
@@ -143,13 +144,20 @@ const PlayerStats = () => {
       setError("Enter a player name before saving.");
       return;
     }
+    // Basic validation to avoid invalid Firestore doc IDs
+    if (trimmedName.includes('/')) {
+      setError('Name cannot contain a slash (/)');
+      return;
+    }
 
     setSubmitting(true);
     setError(null);
 
     try {
       await runTransaction(db, async (transaction) => {
-        const rosterRef = doc(db, "users", trimmedName);
+        // Keep doc IDs predictable but safe; avoid whitespace/case issues
+        const rosterId = slugify(trimmedName) || trimmedName;
+        const rosterRef = doc(db, "users", rosterId);
         const rosterSnapshot = await transaction.get(rosterRef);
         if (rosterSnapshot.exists()) {
           throw new Error(
@@ -321,7 +329,7 @@ const PlayerStats = () => {
                 <option value="captain">Captain</option>
               </select>
               <Text className="hint">Creates a roster entry in users.</Text>
-              <Button type="submit" loading={submitting}>Add Player</Button>
+              <Button type="submit" isLoading={submitting}>Add Player</Button>
             </form>
           ) : (
             <Text className="hint">Use the button to add a new squad member.</Text>

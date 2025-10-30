@@ -23,6 +23,7 @@ export type StandingsPayload = {
 }
 
 export const useStandings = () => {
+  const DEV = (import.meta as any).env?.DEV === true
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [errorDetail, setErrorDetail] = useState<string | null>(null)
@@ -57,10 +58,10 @@ export const useStandings = () => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         // Try parsing JSON; if content-type is not JSON but body is JSON, still parse
         const ct = res.headers.get('content-type') || ''
-        console.log('[standings] fetch ok', { url, status: res.status, contentType: ct })
+        if (DEV) console.log('[standings] fetch ok', { url, status: res.status, contentType: ct })
         const text = await res.text()
         try {
-          console.log('[standings] raw body first 400 chars:', text.slice(0, 400))
+          if (DEV) console.log('[standings] raw body first 400 chars:', text.slice(0, 400))
         } catch {}
         let parsed: any
         try {
@@ -91,13 +92,13 @@ export const useStandings = () => {
           source: String(payload.source ?? ''),
           standings: rows,
         }
-        console.log('[standings] parsed rows:', rows.length)
+        if (DEV) console.log('[standings] parsed rows:', rows.length)
         setData(normalized)
         setLoading(false)
         return
       } catch (e: any) {
         lastErrMessage = e?.message || String(e)
-        console.warn('[standings] fetch/parse failed for', url, lastErrMessage)
+        if (DEV) console.warn('[standings] fetch/parse failed for', url, lastErrMessage)
         continue
       }
     }

@@ -10,7 +10,8 @@ export default defineConfig({
       '/api/standings': {
         target: 'https://europe-west2-pool-league-74bf5.cloudfunctions.net',
         changeOrigin: true,
-        rewrite: () => '/scrapeCLeagueTable',
+        // Ensure this targets the deployed function name
+        rewrite: () => '/standingsProxy',
       },
     },
   },

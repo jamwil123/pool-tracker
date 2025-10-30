@@ -3,12 +3,13 @@ import { setGlobalOptions, logger } from 'firebase-functions/v2'
 
 setGlobalOptions({ region: 'europe-west2', memory: '256MiB', timeoutSeconds: 30 })
 
-// Public standings API base
-const REMOTE = 'https://scrapecleaguetable-wbv6pvivda-nw.a.run.app/'
+// Public standings API base (configurable via env)
+const REMOTE = process.env.REMOTE_STANDINGS_URL || 'https://scrapecleaguetable-wbv6pvivda-nw.a.run.app/'
 
 export const standingsProxy = onRequest(async (req, res) => {
-  // CORS preflight
-  res.setHeader('Access-Control-Allow-Origin', '*')
+  // CORS: default to open for GET; optionally restrict via ALLOWED_ORIGIN
+  const allowedOrigin = process.env.ALLOWED_ORIGIN || '*'
+  res.setHeader('Access-Control-Allow-Origin', allowedOrigin)
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
   if (req.method === 'OPTIONS') {

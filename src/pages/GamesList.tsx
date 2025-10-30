@@ -232,7 +232,7 @@ const GamesList = () => {
             <option value="away">Away</option>
           </select>
           <HStack mt={3}>
-            <Button type="submit" loading={submitting} colorScheme="blue">Save Match</Button>
+            <Button type="submit" isLoading={submitting} colorScheme="blue">Save Match</Button>
             <Button variant="ghost" onClick={reset} type="button">Cancel</Button>
           </HStack>
           </form>
@@ -249,28 +249,28 @@ const GamesList = () => {
           const isPast = !!matchDate && matchDate.getTime() < now.getTime()
           const canSetResult = Boolean(matchDate && (isSameDay || isPast))
           return (
-          <RouterLink
-            key={g.id}
-            to={`/games/${g.id}`}
-            style={{ textDecoration: 'none' }}
-            onClick={(e) => {
-              // Prevent navigation while editing within the card, but allow input defaults (e.g., date picker)
-              if (canManage && editingId === g.id) e.preventDefault()
-            }}
-          >
-            <>
-              <MatchCard
-                game={g}
-                dateLabel={formatMatchDateLabel(g.matchDate, (g as any).notes)}
-                canManage={canManage}
-                canSetResult={canSetResult}
-                deleting={deletingId === g.id}
-                isEditing={editingId === g.id}
-                onMarkWin={() => setResult(g.id, 'win')}
-                onMarkLoss={() => setResult(g.id, 'loss')}
-                onEdit={() => openEdit(g)}
-                onDelete={() => deleteMatch(g.id)}
-              />
+            <Box key={g.id}>
+              <RouterLink
+                to={`/games/${g.id}`}
+                style={{ textDecoration: 'none' }}
+                onClick={(e) => {
+                  // Prevent navigation while editing within the card, but allow input defaults (e.g., date picker)
+                  if (canManage && editingId === g.id) e.preventDefault()
+                }}
+              >
+                <MatchCard
+                  game={g}
+                  dateLabel={formatMatchDateLabel(g.matchDate, (g as any).notes)}
+                  canManage={canManage}
+                  canSetResult={canSetResult}
+                  deleting={deletingId === g.id}
+                  isEditing={editingId === g.id}
+                  onMarkWin={() => setResult(g.id, 'win')}
+                  onMarkLoss={() => setResult(g.id, 'loss')}
+                  onEdit={() => openEdit(g)}
+                  onDelete={() => deleteMatch(g.id)}
+                />
+              </RouterLink>
               {canManage && editingId === g.id ? (
                 <MatchInlineEdit
                   value={editingState}
@@ -282,10 +282,10 @@ const GamesList = () => {
                   onCancel={() => cancelEdit()}
                 />
               ) : null}
-            </>
-          </RouterLink>
-        )})}
-        {visible.length === 0 ? <Text>No matches.</Text> : null}
+            </Box>
+          )
+        })}
+      {visible.length === 0 ? <Text>No matches.</Text> : null}
       </SimpleGrid>
     </Box>
   )
