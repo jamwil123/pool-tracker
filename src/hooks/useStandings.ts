@@ -29,7 +29,29 @@ export const useStandings = () => {
   const [errorDetail, setErrorDetail] = useState<string | null>(null)
   const [data, setData] = useState<StandingsPayload | null>(null)
   const [lastUrl, setLastUrl] = useState<string | null>(null)
-  // no artificial delay; show data as soon as it arrives
+  // Persist last-good payload in sessionStorage for this browser session
+  const CACHE_KEY = 'standings:cache:v1'
+
+  const saveCache = (payload: StandingsPayload, url: string | null) => {
+    try {
+      if (typeof window === 'undefined' || !window.sessionStorage) return
+      const record = { payload, url, savedAt: Date.now() }
+      window.sessionStorage.setItem(CACHE_KEY, JSON.stringify(record))
+    } catch {}
+  }
+
+  const loadCache = (): { payload: StandingsPayload; url: string | null } | null => {
+    try {
+      if (typeof window === 'undefined' || !window.sessionStorage) return null
+      const raw = window.sessionStorage.getItem(CACHE_KEY)
+      if (!raw) return null
+      const parsed = JSON.parse(raw)
+      if (parsed && parsed.payload && Array.isArray(parsed.payload.standings)) {
+        return { payload: parsed.payload as StandingsPayload, url: (parsed.url as string | null) ?? null }
+      }
+      return null
+    } catch { return null }
+  }
 
   const load = async (signal?: AbortSignal) => {
     setLoading(true)
@@ -94,6 +116,7 @@ export const useStandings = () => {
         }
         if (DEV) console.log('[standings] parsed rows:', rows.length)
         setData(normalized)
+        saveCache(normalized, url)
         setLoading(false)
         return
       } catch (e: any) {
@@ -109,6 +132,15 @@ export const useStandings = () => {
   }
 
   useEffect(() => {
+    const cached = loadCache()
+    if (cached) {
+      setData(cached.payload)
+      setLastUrl(cached.url)
+      setError(null)
+      setErrorDetail(null)
+      setLoading(false)
+      return () => {}
+    }
     const ac = new AbortController()
     load(ac.signal)
     return () => { ac.abort() }

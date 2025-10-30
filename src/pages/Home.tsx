@@ -151,9 +151,14 @@ const Home = () => {
 
       {/* League standings (from external scraper) */}
       <Box borderWidth="1px" borderRadius="lg" p={5} boxShadow="sm" bg="white" mt={6}>
-        <HStack justify="space-between" align="baseline" mb={2}>
-          <Heading as="h3" size="md">League Standings</Heading>
-          {standings.data?.division ? <Text color="gray.600">{standings.data.division}</Text> : null}
+        <HStack justify="space-between" align="center" mb={2}>
+          <HStack gap={3} align="baseline">
+            <Heading as="h3" size="md">League Standings</Heading>
+            {standings.data?.division ? <Text color="gray.600">{standings.data.division}</Text> : null}
+          </HStack>
+          <Button size="sm" variant="outline" onClick={() => standings.reload()} disabled={standings.loading}>
+            {standings.loading ? 'Refreshing…' : 'Refresh'}
+          </Button>
         </HStack>
         {standings.data ? (
           <>
