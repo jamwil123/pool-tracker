@@ -10,7 +10,8 @@
       "**/node_modules/**"
     ],
     "rewrites": [
-      { "source": "/api/standings", "function": "standingsProxy" }
+      { "source": "/api/standings", "function": "standingsProxy" },
+      { "source": "**", "destination": "/index.html" }
     ]
   }
 }

@@ -5,19 +5,8 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   build: {
+    // Keep default chunking to avoid potential runtime ordering issues
     chunkSizeWarningLimit: 1500,
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (id.includes('node_modules')) {
-            if (id.includes('react') || id.includes('react-dom')) return 'react-vendor'
-            if (id.includes('recharts')) return 'recharts'
-            if (id.includes('firebase')) return 'firebase'
-            if (id.includes('@chakra-ui') || id.includes('@emotion') || id.includes('framer-motion')) return 'chakra'
-          }
-        },
-      },
-    },
   },
   server: {
     proxy: {
