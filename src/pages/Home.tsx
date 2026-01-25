@@ -6,6 +6,7 @@ import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts'
 import { Link as RouterLink } from 'react-router-dom'
 import { TEAM_NAME } from '../config/app'
 import useStandings from '../hooks/useStandings'
+import useMyPlayerMetrics from '../hooks/useMyPlayerMetrics'
 import ModeToggle from '../components/ModeToggle'
 import formatMatchDateLabel from '../utils/date'
 import usePersistentState from '../hooks/usePersistentState'
@@ -14,6 +15,7 @@ const Home = () => {
   const { user, profile } = useAuth()
   const uid = user?.uid ?? ''
   const { loading, totals, singles, subsDueCount, subsDueGames, nextGame } = useUserTotals(uid)
+  const myMetrics = useMyPlayerMetrics(uid)
   const standings = useStandings()
   const [isDialogOpen, setDialogOpen] = useState(false)
   const [chartMode, setChartMode] = usePersistentState<'all' | 'singles' | 'doubles'>('homeChartMode', 'all')
@@ -148,6 +150,52 @@ const Home = () => {
           </Box>
         </RouterLink>
       </SimpleGrid>
+
+      {/* My Metrics */}
+      <Box borderWidth="1px" borderRadius="lg" p={5} boxShadow="sm" bg="white" mt={6}>
+        <Heading as="h3" size="md" mb={2}>My Metrics</Heading>
+        {!uid ? (
+          <Text color="gray.600">Sign in to view your metrics.</Text>
+        ) : myMetrics.loading ? (
+          <Text color="gray.600">Calculating…</Text>
+        ) : (
+          <SimpleGrid columns={{ base: 1, sm: 2, md: 3 }} gap={4}>
+            <Box>
+              <Text color="gray.600" fontSize="sm">Selection Rate</Text>
+              <Text fontWeight={700}>{myMetrics.selectionRatePct.toFixed(0)}%</Text>
+              <Text color="gray.600" fontSize="xs">Played {myMetrics.matchesPlayed} of {myMetrics.finishedMatches} finished matches</Text>
+            </Box>
+            <Box>
+              <Text color="gray.600" fontSize="sm">Frame Win Rate</Text>
+              <Text fontWeight={700}>{myMetrics.frameWinRatePct.toFixed(1)}%</Text>
+              <Text color="gray.600" fontSize="xs">Wins {myMetrics.frameWins} · Losses {myMetrics.frameLosses}</Text>
+            </Box>
+            <Box>
+              <Text color="gray.600" fontSize="sm">Frames Won / Match</Text>
+              <Text fontWeight={700}>{myMetrics.framesWonPerMatch.toFixed(2)}</Text>
+              <Text color="gray.600" fontSize="xs">Credits, when selected</Text>
+            </Box>
+            <Box>
+              <Text color="gray.600" fontSize="sm">Singles Win Rate</Text>
+              <Text fontWeight={700}>{myMetrics.singlesWinRatePct.toFixed(1)}%</Text>
+            </Box>
+            <Box>
+              <Text color="gray.600" fontSize="sm">Doubles Win Rate</Text>
+              <Text fontWeight={700}>{myMetrics.doublesWinRatePct.toFixed(1)}%</Text>
+            </Box>
+            <Box>
+              <Text color="gray.600" fontSize="sm">Last 5 (Frames)</Text>
+              <Text fontWeight={700}>{myMetrics.last5FrameWinRatePct.toFixed(1)}%</Text>
+              <Text color="gray.600" fontSize="xs">Win rate over most recent 5 finished matches</Text>
+            </Box>
+            <Box>
+              <Text color="gray.600" fontSize="sm">Contribution Share</Text>
+              <Text fontWeight={700}>{myMetrics.contributionSharePct.toFixed(1)}%</Text>
+              <Text color="gray.600" fontSize="xs">Of team frame wins (credits) across finished matches</Text>
+            </Box>
+          </SimpleGrid>
+        )}
+      </Box>
 
       {/* League standings (from external scraper) */}
       <Box borderWidth="1px" borderRadius="lg" p={5} boxShadow="sm" bg="white" mt={6}>
