@@ -140,9 +140,8 @@ const CaptainsDashboard = () => {
       const totalFrames = e.framesWon + e.framesLost
       const pct = totalFrames > 0 ? Math.round((e.framesWon / totalFrames) * 100) : 0
       return { id: p.id, name: p.displayName, played: e.played, framesWon: e.framesWon, framesLost: e.framesLost, pct, happened: totalHappened }
-    }).filter((r) => r.played > 0)
+    })
       .sort((a, b) => b.pct - a.pct || b.played - a.played)
-      .slice(0, 8)
     return rows
   }, [games, profiles])
 
@@ -436,7 +435,7 @@ const CaptainsDashboard = () => {
           </Box>
 
           <Box borderWidth="1px" borderRadius="lg" p={5} bg="white">
-            <Heading as="h3" size="md" mb={2}>Top Match Win % (Players)</Heading>
+            <Heading as="h3" size="md" mb={2}>Player Frame Win %</Heading>
             {perPlayerMatchForm.length === 0 ? (
               <Text color="gray.600">No finished games recorded yet.</Text>
             ) : (
@@ -449,7 +448,7 @@ const CaptainsDashboard = () => {
                 ))}
               </Box>
             )}
-            <Text color="gray.600" fontSize="sm" mt={2}>Counts only games that have happened; percentage = matches won / matches played.</Text>
+            <Text color="gray.600" fontSize="sm" mt={2}>Counts only games that have happened. Percentage = frames won / frames played (singles + doubles credits).</Text>
           </Box>
 
           <Box borderWidth="1px" borderRadius="lg" p={5} bg="white">
