@@ -166,6 +166,8 @@ const CaptainsDashboard = () => {
     return { list, total }
   }, [games, profiles, rosterEmails])
 
+  // Doubles partnerships removed: current data model does not capture exact pairings.
+
   // Team means across finished games
   const teamMeans = useMemo(() => {
     const now = Date.now()
@@ -578,6 +580,8 @@ const CaptainsDashboard = () => {
             </SimpleGrid>
           )}
         </Box>
+
+        {/* Doubles partnerships omitted (data model doesn't track exact pairs). */}
 
         {/* Player insights (detailed) */}
         <Box borderWidth="1px" borderRadius="lg" p={5} bg="white" mt={4}>

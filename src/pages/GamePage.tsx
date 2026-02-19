@@ -70,6 +70,21 @@ const GamePage = () => {
     }
   }, [game, myUid, myProfileId])
 
+  const teamUniqueFrameTotals = useMemo(() => {
+    if (!game) return { w: 0, l: 0, total: 0 }
+    const stats = (game.playerStats || []) as SeasonGamePlayerStat[]
+    let sW = 0, sL = 0, dW = 0, dL = 0
+    for (const s of stats) {
+      sW += Number(s.singlesWins || 0)
+      sL += Number(s.singlesLosses || 0)
+      dW += Number(s.doublesWins || 0)
+      dL += Number(s.doublesLosses || 0)
+    }
+    const w = sW + Math.round(dW / 2)
+    const l = sL + Math.round(dL / 2)
+    return { w, l, total: w + l }
+  }, [game])
+
   const [chartMode, setChartMode] = usePersistentState<'all' | 'singles' | 'doubles'>('gameChartMode', 'all')
 
   const canManage = useMemo(() => !!profile && isManagerRole(profile.role), [profile])
@@ -262,6 +277,28 @@ const GamePage = () => {
           <h2>{game.opponent}</h2>
           <p>{formatMatchDateLabel(game.matchDate, game.notes)} · {game.location || 'Location TBC'} · {game.homeOrAway === 'home' ? 'Home' : 'Away'}</p>
         </header>
+
+        {/* Team Frames banner */}
+        <Box
+          mt={3}
+          p={4}
+          borderWidth="1px"
+          borderRadius="lg"
+          bg="white"
+          display="flex"
+          alignItems="center"
+          justifyContent="space-between"
+        >
+          <Box>
+            <Text fontSize="sm" color="gray.600" fontWeight={600}>Team Frames</Text>
+            <Text fontSize="xs" color="gray.500">out of 13</Text>
+          </Box>
+          <HStack align="baseline" gap={2}>
+            <Text fontSize={{ base: '3xl', sm: '4xl' }} fontWeight="bold" color="green.700">{teamUniqueFrameTotals.w}</Text>
+            <Text fontSize={{ base: '2xl', sm: '3xl' }} color="gray.500">:</Text>
+            <Text fontSize={{ base: '3xl', sm: '4xl' }} fontWeight="bold" color="red.700">{teamUniqueFrameTotals.l}</Text>
+          </HStack>
+        </Box>
         <div className="cards-responsive cards-2col">
         {/* Match Info */}
         <article className="card">
