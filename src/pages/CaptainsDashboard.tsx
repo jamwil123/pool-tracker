@@ -17,6 +17,7 @@ const CaptainsDashboard = () => {
   const standings = useStandings()
   const [games, setGames] = useState<Array<{ id: string; opponent: string; result: 'win' | 'loss' | 'pending'; matchDate?: Date | null; homeOrAway?: 'home' | 'away'; playerIds: string[]; stats: GameStat[] }>>([])
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>('')
+  const [recentWindow, setRecentWindow] = useState<number>(3)
   // Add Profile (captain only)
   const [showAddProfile, setShowAddProfile] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -247,6 +248,53 @@ const CaptainsDashboard = () => {
       playersCount: n,
     }
   }, [games])
+
+  // Selection suggestions based on last N finished matches
+  const selectionSuggestions = useMemo(() => {
+    const now = Date.now()
+    const happened = (g: typeof games[number]) => g.result !== 'pending' || (g.matchDate ? g.matchDate.getTime() < now : false)
+    const finished = games.filter(happened)
+    const sorted = [...finished].sort((a, b) => (a.matchDate?.getTime() || 0) - (b.matchDate?.getTime() || 0))
+    const lastN = sorted.slice(-Math.max(2, Math.min(3, recentWindow)))
+    const map = new Map<string, { apps: number; w: number; l: number }>()
+    for (const g of lastN) {
+      // Determine who appeared (selected) in this match
+      const appeared = new Set<string>()
+      if (Array.isArray(g.playerIds) && g.playerIds.length) {
+        for (const pid of g.playerIds) { if (pid) appeared.add(String(pid)) }
+      } else {
+        for (const s of g.stats) { if (s && s.playerId) appeared.add(String(s.playerId)) }
+      }
+      for (const pid of appeared) {
+        const rec = map.get(pid) || { apps: 0, w: 0, l: 0 }
+        rec.apps += 1
+        map.set(pid, rec)
+      }
+      // Add frame results (credits)
+      for (const s of g.stats) {
+        if (!s || !s.playerId) continue
+        const sw = Number(s.singlesWins || 0)
+        const sl = Number(s.singlesLosses || 0)
+        const dw = Number(s.doublesWins || 0)
+        const dl = Number(s.doublesLosses || 0)
+        const rec = map.get(s.playerId) || { apps: 0, w: 0, l: 0 }
+        rec.w += sw + dw
+        rec.l += sl + dl
+        map.set(s.playerId, rec)
+      }
+    }
+    const rows = profiles.map((p) => {
+      const e = map.get(p.id) || { apps: 0, w: 0, l: 0 }
+      const total = e.w + e.l
+      const pct = total > 0 ? Math.round((e.w / total) * 100) : 0
+      const form = e.w - e.l
+      return { id: p.id, name: p.displayName, role: p.role, apps: e.apps, w: e.w, l: e.l, pct, form }
+    })
+    // Show only players with at least one recent appearance
+    .filter((r) => r.apps > 0)
+    .sort((a, b) => b.form - a.form || b.pct - a.pct || b.w - a.w || a.name.localeCompare(b.name))
+    return rows
+  }, [games, profiles, recentWindow])
 
 
   const leagueOutlook = useMemo(() => {
@@ -579,6 +627,48 @@ const CaptainsDashboard = () => {
               </Box>
             </SimpleGrid>
           )}
+        </Box>
+
+        {/* Selection Suggestions (recent form) */}
+        <Box borderWidth="1px" borderRadius="lg" p={5} bg="white" mt={4}>
+          <HStack justify="space-between" align="center" mb={2}>
+            <Heading as="h3" size="md">Selection Suggestions</Heading>
+            <HStack gap={2}>
+              <Button size="xs" variant={recentWindow === 2 ? 'solid' : 'outline'} onClick={() => setRecentWindow(2)}>Last 2</Button>
+              <Button size="xs" variant={recentWindow === 3 ? 'solid' : 'outline'} onClick={() => setRecentWindow(3)}>Last 3</Button>
+            </HStack>
+          </HStack>
+          {selectionSuggestions.length === 0 ? (
+            <Text color="gray.600">No recent appearances to suggest from.</Text>
+          ) : (
+            <Box overflowX="auto">
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: 'left', padding: '6px' }}>Player</th>
+                    <th style={{ textAlign: 'left', padding: '6px' }}>Role</th>
+                    <th style={{ textAlign: 'right', padding: '6px' }}>Apps</th>
+                    <th style={{ textAlign: 'right', padding: '6px' }}>Frames W:L</th>
+                    <th style={{ textAlign: 'right', padding: '6px' }}>Win %</th>
+                    <th style={{ textAlign: 'right', padding: '6px' }}>Form</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectionSuggestions.slice(0, 12).map((r) => (
+                    <tr key={r.id}>
+                      <td style={{ padding: '6px' }}>{r.name}</td>
+                      <td style={{ padding: '6px' }}>{r.role}</td>
+                      <td style={{ padding: '6px', textAlign: 'right' }}>{r.apps}/{Math.max(2, Math.min(3, recentWindow))}</td>
+                      <td style={{ padding: '6px', textAlign: 'right' }}>{r.w}:{r.l}</td>
+                      <td style={{ padding: '6px', textAlign: 'right' }}>{r.pct}%</td>
+                      <td style={{ padding: '6px', textAlign: 'right', color: r.form >= 0 ? '#166534' : '#991b1b' }}>{r.form >= 0 ? `+${r.form}` : r.form}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Box>
+          )}
+          <Text color="gray.600" fontSize="sm" mt={2}>Based on last {Math.max(2, Math.min(3, recentWindow))} finished team matches. Frames count singles + doubles (credits).</Text>
         </Box>
 
         {/* Doubles partnerships omitted (data model doesn't track exact pairs). */}
