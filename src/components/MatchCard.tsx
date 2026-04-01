@@ -14,12 +14,28 @@ type Props = {
   isEditing: boolean
   onMarkWin: () => void
   onMarkLoss: () => void
-  onMarkConceded: () => void
+  onMarkOpponentConcede: () => void
+  onMarkTeamConcede: () => void
   onEdit: () => void
   onDelete: () => void
 }
 
-const MatchCard = ({ game, dateLabel, canManage, canSetResult, deleting, isEditing, onMarkWin, onMarkLoss, onMarkConceded, onEdit, onDelete }: Props) => {
+const MatchCard = ({
+  game,
+  dateLabel,
+  canManage,
+  canSetResult,
+  deleting,
+  isEditing,
+  onMarkWin,
+  onMarkLoss,
+  onMarkOpponentConcede,
+  onMarkTeamConcede,
+  onEdit,
+  onDelete,
+}: Props) => {
+  const isConcededByOpponent = game.decisionType === 'concededByOpponent'
+  const isConcededByUs = game.decisionType === 'concededByUs'
   return (
     <Box
       borderWidth="1px"
@@ -40,6 +56,11 @@ const MatchCard = ({ game, dateLabel, canManage, canSetResult, deleting, isEditi
         </Box>
       </HStack>
       <Text mt={2} color="gray.700">{game.homeOrAway === 'home' ? 'Home' : 'Away'} fixture</Text>
+      {isConcededByOpponent || isConcededByUs ? (
+        <Text mt={1} fontSize="sm" color={isConcededByOpponent ? 'green.700' : 'orange.700'}>
+          {isConcededByOpponent ? 'Opponent conceded — recorded as a win.' : 'We conceded — recorded as a loss.'}
+        </Text>
+      ) : null}
       {canManage ? (
         <HStack mt={3} gap={2} wrap="wrap">
           <Button
@@ -63,10 +84,19 @@ const MatchCard = ({ game, dateLabel, canManage, canSetResult, deleting, isEditi
             size={{ base: 'xs', sm: 'sm' }}
             colorScheme="orange"
             variant="outline"
-            onClick={(e) => { e.preventDefault(); onMarkConceded() }}
-            title="Conceded matches stay on the schedule but don’t count toward stats"
+            onClick={(e) => { e.preventDefault(); onMarkOpponentConcede() }}
+            title="Opponent cancelled — counts as a win but no player stats."
           >
-            Mark Conceded
+            Opponent Conceded
+          </Button>
+          <Button
+            size={{ base: 'xs', sm: 'sm' }}
+            colorScheme="red"
+            variant="outline"
+            onClick={(e) => { e.preventDefault(); onMarkTeamConcede() }}
+            title="We conceded — counts as a loss and clears player stats."
+          >
+            We Conceded
           </Button>
           <Button size={{ base: 'xs', sm: 'sm' }} variant="ghost" onClick={(e) => { e.preventDefault(); onEdit() }}>{isEditing ? 'Close' : 'Edit'}</Button>
           <Button

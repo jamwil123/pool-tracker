@@ -5,7 +5,7 @@ import { Link as RouterLink } from 'react-router-dom'
 import { db } from '../firebase/config'
 import { useAuth } from '../context/AuthContext'
 import { isManagerRole } from '../types/models'
-import type { SeasonGameDocument } from '../types/models'
+import type { SeasonGameDecisionType, SeasonGameDocument } from '../types/models'
 import { Box, Heading, Text, HStack, Button, SimpleGrid, Input } from '@chakra-ui/react'
 import formatMatchDateLabel from '../utils/date'
 import usePersistentState from '../hooks/usePersistentState'
@@ -143,6 +143,7 @@ const GamesList = () => {
         playerStats: [],
         notes: null,
         result: 'pending',
+        decisionType: 'played',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       })
@@ -155,10 +156,10 @@ const GamesList = () => {
     }
   }
 
-  const setResult = async (id: string, result: 'win' | 'loss' | 'conceded') => {
+  const setResult = async (id: string, result: 'win' | 'loss', decisionType: SeasonGameDecisionType = 'played') => {
     if (!canManage) return
     setError(null)
-    const out = await updateResult(id, result, games)
+    const out = await updateResult(id, result, games, { decisionType })
     if (!out.ok) setError(out.error)
   }
 
@@ -257,7 +258,8 @@ const GamesList = () => {
                   isEditing={editingId === g.id}
                   onMarkWin={() => setResult(g.id, 'win')}
                   onMarkLoss={() => setResult(g.id, 'loss')}
-                  onMarkConceded={() => setResult(g.id, 'conceded')}
+                  onMarkOpponentConcede={() => setResult(g.id, 'win', 'concededByOpponent')}
+                  onMarkTeamConcede={() => setResult(g.id, 'loss', 'concededByUs')}
                   onEdit={() => openEdit(g)}
                   onDelete={() => deleteMatch(g.id)}
                 />

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { collection, onSnapshot, query, where, limit } from 'firebase/firestore'
 import type { SeasonGameDocument, SeasonGamePlayerStat } from '../types/models'
 import { db } from '../firebase/config'
-import { classifyMatch, isConcededResult } from '../utils/games'
+import { classifyMatch, isConcededDecision } from '../utils/games'
 
 export type MyPlayerMetrics = {
   loading: boolean
@@ -65,9 +65,9 @@ export const useMyPlayerMetrics = (uid: string): MyPlayerMetrics => {
       return Boolean(s && (s === uid || (profileId && s === profileId)))
     }
     const finished = games.filter((g) => {
-      const result = (g.data as any).result
-      if (isConcededResult(result)) return false
-      return classifyMatch({ matchDate: (g.data as any).matchDate, result }) === 'previous'
+      const data = g.data as any
+      if (isConcededDecision(data?.decisionType)) return false
+      return classifyMatch({ matchDate: data.matchDate, result: data.result }) === 'previous'
     })
     const finishedCount = finished.length
 

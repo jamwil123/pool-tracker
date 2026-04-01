@@ -55,6 +55,8 @@ export type SeasonGamePlayerStat = {
   subsPaid?: boolean
 }
 
+export type SeasonGameDecisionType = 'played' | 'concededByUs' | 'concededByOpponent'
+
 export type SeasonGameDocument = {
   opponent: string
   matchDate: Timestamp | null
@@ -62,7 +64,8 @@ export type SeasonGameDocument = {
   homeOrAway: 'home' | 'away'
   players: string[]
   playerStats: SeasonGamePlayerStat[]
-  result: 'win' | 'loss' | 'pending' | 'conceded'
+  result: 'win' | 'loss' | 'pending'
+  decisionType?: SeasonGameDecisionType | null
   notes: string | null
   createdAt: Timestamp | FieldValue | null
   updatedAt?: Timestamp | FieldValue | null

@@ -163,6 +163,8 @@ const normalizeGame = (raw) => {
   const players = Array.isArray(raw.players) ? raw.players : []
   const playerStats = Array.isArray(raw.playerStats) ? raw.playerStats : []
   const result = raw.result === 'win' || raw.result === 'loss' ? raw.result : 'pending'
+  const concededValues = ['concededByUs', 'concededByOpponent']
+  const decisionType = concededValues.includes(raw.decisionType) ? raw.decisionType : 'played'
 
   return {
     opponent,
@@ -172,6 +174,7 @@ const normalizeGame = (raw) => {
     players,
     playerStats,
     result,
+    decisionType,
     notes,
     createdAt: serverTimestamp,
     updatedAt: serverTimestamp,

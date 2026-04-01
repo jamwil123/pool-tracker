@@ -10,11 +10,12 @@ import { getResultLabel, getResultTagClass } from '../utils/status'
 import { useAuth } from "../context/AuthContext";
 import useSeasonActions from '../hooks/useSeasonActions'
 import { clamp } from '../utils/stats'
+import { isConcededDecision } from '../utils/games'
 import ImportFixturesPanel from './ImportFixturesPanel'
 import PlayerStatsEditor from './PlayerStatsEditor'
 import PlayerStatsSummary from './PlayerStatsSummary'
 import MatchForm from './MatchForm'
-import type { SeasonGameDocument, SeasonGamePlayerStat, UserProfileDocument } from "../types/models";
+import type { SeasonGameDecisionType, SeasonGameDocument, SeasonGamePlayerStat, UserProfileDocument } from "../types/models";
 
 type SeasonGame = SeasonGameDocument & { id: string };
 
@@ -269,11 +270,11 @@ const SeasonManager = () => {
   };
 
   const { updateResult, importFixtures, savePlayerStats } = useSeasonActions()
-  const handleUpdateResult = async (gameId: string, result: 'win' | 'loss' | 'conceded') => {
+  const handleUpdateResult = async (gameId: string, result: 'win' | 'loss', decisionType: SeasonGameDecisionType = 'played') => {
     if (!canManageGames) return
-    const out = await updateResult(gameId, result, games)
+    const out = await updateResult(gameId, result, games, { decisionType })
     if (!out.ok) setError(out.error)
-    else if (result === 'conceded' && activeMatchId === gameId) {
+    else if (decisionType !== 'played' && activeMatchId === gameId) {
       setActiveMatchId(null)
       setRows([])
     }
@@ -318,6 +319,7 @@ const SeasonManager = () => {
         playerStats: [],
         notes: null,
         result: "pending",
+        decisionType: "played",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -565,7 +567,7 @@ const SeasonManager = () => {
             {game.notes ? <p>{game.notes}</p> : null}
 
             <PlayerStatsSummary stats={game.playerStats} canManage={canManageGames} />
-            {game.result === 'conceded' ? (
+            {isConcededDecision(game.decisionType) ? (
               <p className="hint" style={{ marginTop: 8 }}>This match was conceded, so player stats and subs are optional.</p>
             ) : null}
 
@@ -586,12 +588,18 @@ const SeasonManager = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleUpdateResult(game.id, "conceded")}
+                    onClick={() => handleUpdateResult(game.id, "win", "concededByOpponent")}
                   >
-                    Mark Conceded
+                    Opponent Conceded
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateResult(game.id, "loss", "concededByUs")}
+                  >
+                    We Conceded
                   </button>
                 </div>
-                {game.result === 'conceded' ? (
+                {isConcededDecision(game.decisionType) ? (
                   <p className="hint">Player results are disabled for conceded fixtures.</p>
                 ) : (
                   <>

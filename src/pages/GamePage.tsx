@@ -112,8 +112,10 @@ const GamePage = () => {
   useEffect(() => { setPlayerOptions(profileOptions) }, [profileOptions])
 
   useEffect(() => {
-    if (game?.result === 'conceded' && showEditorModal) setShowEditorModal(false)
-  }, [game?.result, showEditorModal])
+    if (game?.decisionType && (game.decisionType === 'concededByOpponent' || game.decisionType === 'concededByUs') && showEditorModal) {
+      setShowEditorModal(false)
+    }
+  }, [game?.decisionType, showEditorModal])
 
   const updateRow = (rowId: string, updates: Partial<PlayerStatRow>) =>
     setRows((prev) => prev.map((r) => (r.rowId === rowId ? { ...r, ...updates } : r)))
@@ -274,7 +276,9 @@ const GamePage = () => {
     <main className="container"><p>{gameLoading ? 'Loading match…' : 'Match not found.'}</p></main>
   )
 
-  const isConceded = game.result === 'conceded'
+  const isConcededByOpponent = game.decisionType === 'concededByOpponent'
+  const isConcededByUs = game.decisionType === 'concededByUs'
+  const isConceded = isConcededByOpponent || isConcededByUs
 
   return (
     <main className="container">
@@ -329,8 +333,10 @@ const GamePage = () => {
                   <Text color="gray.700">Date: {formatMatchDateLabel(game.matchDate, game.notes, 'TBC')}</Text>
                   <Text color="gray.700">Location: {game.location || 'TBC'}</Text>
                   {isConceded ? (
-                    <Text color="orange.700" fontWeight={600} mt={2}>
-                      Match conceded — player stats and subs are omitted from totals.
+                    <Text color={isConcededByOpponent ? 'green.700' : 'orange.700'} fontWeight={600} mt={2}>
+                      {isConcededByOpponent
+                        ? 'Opponent conceded — recorded as a win, but no player stats are required.'
+                        : 'We conceded — recorded as a loss, and no player stats are required.'}
                     </Text>
                   ) : null}
                 </Box>
@@ -374,7 +380,13 @@ const GamePage = () => {
               ) : null}
             </header>
             <PlayerStatsSummary stats={game.playerStats || []} canManage={canManage} myUid={myUid} myProfileId={myProfileId} />
-            {isConceded ? <Text color="gray.600" fontSize="sm" mt={2}>This fixture was conceded, so no individual stats are required.</Text> : null}
+            {isConceded ? (
+              <Text color="gray.600" fontSize="sm" mt={2}>
+                {isConcededByOpponent
+                  ? 'Opponent conceded — frame results are left blank.'
+                  : 'We conceded — players are excused from providing frame stats.'}
+              </Text>
+            ) : null}
           </article>
 
           {/* My Match Breakdown chart with mode toggle */}

@@ -2,19 +2,28 @@ import { useEffect, useMemo, useState } from 'react'
 import { collection, onSnapshot, orderBy, query, addDoc, serverTimestamp, doc, updateDoc } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuth } from '../context/AuthContext'
-import { isManagerRole, type UserProfileDocument } from '../types/models'
+import { isManagerRole, type UserProfileDocument, type SeasonGameDecisionType } from '../types/models'
 import useStandings from '../hooks/useStandings'
 import { Box, Heading, Text, SimpleGrid, HStack, Button } from '@chakra-ui/react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts'
-import { countsTowardsStats, isConcededResult } from '../utils/games'
+import { countsTowardsStats, isConcededDecision } from '../utils/games'
 
 type ProfileRow = (UserProfileDocument & { id: string })
 type GameStat = { playerId: string; singlesWins: number; singlesLosses: number; doublesWins: number; doublesLosses: number; subsPaid?: boolean }
-type DashboardGame = { id: string; opponent: string; result: 'win' | 'loss' | 'pending' | 'conceded'; matchDate?: Date | null; homeOrAway?: 'home' | 'away'; playerIds: string[]; stats: GameStat[] }
+type DashboardGame = {
+  id: string
+  opponent: string
+  result: 'win' | 'loss' | 'pending'
+  matchDate?: Date | null
+  homeOrAway?: 'home' | 'away'
+  playerIds: string[]
+  stats: GameStat[]
+  decisionType?: SeasonGameDecisionType | null
+}
 
 const hasGameHappenedForStats = (game: DashboardGame, now: number) => {
-  if (isConcededResult(game.result)) return false
-  if (countsTowardsStats(game.result)) return true
+  if (isConcededDecision(game.decisionType)) return false
+  if (countsTowardsStats(game.result, game.decisionType)) return true
   return game.matchDate ? game.matchDate.getTime() < now : false
 }
 
@@ -62,10 +71,12 @@ const CaptainsDashboard = () => {
     const unsub = onSnapshot(collection(db, 'games'), (snap) => {
       const rows = snap.docs.map((d) => {
         const data = d.data() as any
-        const r: DashboardGame['result'] =
-          data?.result === 'win' || data?.result === 'loss' ? data.result :
-          data?.result === 'conceded' ? 'conceded' :
-          'pending'
+        const rawResult = data?.result
+        const r: DashboardGame['result'] = rawResult === 'win' || rawResult === 'loss' ? rawResult : 'pending'
+        const decisionType: SeasonGameDecisionType | 'played' =
+          data?.decisionType === 'concededByUs' || data?.decisionType === 'concededByOpponent'
+            ? data.decisionType
+            : 'played'
         const md = data?.matchDate && typeof data.matchDate.toDate === 'function' ? data.matchDate.toDate() as Date : null
         const ho: 'home' | 'away' = data?.homeOrAway === 'away' ? 'away' : 'home'
         const pids: string[] = Array.isArray(data?.playerIds) && data.playerIds.length
@@ -83,7 +94,7 @@ const CaptainsDashboard = () => {
               subsPaid: Boolean((s as any)?.subsPaid),
             }))
           : []
-        return { id: d.id, opponent: String(data?.opponent || 'TBC'), result: r, matchDate: md, homeOrAway: ho, playerIds: pids, stats }
+        return { id: d.id, opponent: String(data?.opponent || 'TBC'), result: r, matchDate: md, homeOrAway: ho, playerIds: pids, stats, decisionType }
       })
       setGames(rows)
     })
@@ -124,8 +135,8 @@ const CaptainsDashboard = () => {
     for (const g of games) {
       if (g.result === 'win') wins++
       else if (g.result === 'loss') losses++
-      else if (g.result === 'conceded') conceded++
       else pending++
+      if (isConcededDecision(g.decisionType)) conceded++
     }
     return { wins, losses, pending, conceded }
   }, [games])
@@ -714,7 +725,7 @@ const CaptainsDashboard = () => {
             let teamWinsWith = 0, teamLossWith = 0
             let homeW = 0, homeL = 0, awayW = 0, awayL = 0
             let subsDue = 0
-            const perMatch: Array<{ id: string; date: Date | null; opponent: string; homeOrAway: 'home' | 'away'; sw: number; sl: number; dw: number; dl: number; team: 'win' | 'loss' | 'pending' | 'conceded'; subs: boolean }>
+            const perMatch: Array<{ id: string; date: Date | null; opponent: string; homeOrAway: 'home' | 'away'; sw: number; sl: number; dw: number; dl: number; team: 'win' | 'loss' | 'pending'; subs: boolean }>
               = []
             for (const g of played) {
               const stat = g.stats.find((s) => s.playerId === pid)

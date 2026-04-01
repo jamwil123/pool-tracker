@@ -1,17 +1,24 @@
 import { doc, getDoc, runTransaction, serverTimestamp, setDoc, updateDoc, increment } from 'firebase/firestore'
 import { db } from '../firebase/config'
-import type { SeasonGameDocument, SeasonGamePlayerStat } from '../types/models'
+import type { SeasonGameDecisionType, SeasonGameDocument, SeasonGamePlayerStat } from '../types/models'
 import { buildStableMatchId, normalizeImportGame } from '../utils/fixtures'
 
 export type UpdateResultOutcome = { ok: true } | { ok: false; error: string }
+type UpdateResultOptions = { decisionType?: SeasonGameDecisionType | null }
 
 const useSeasonActions = () => {
-  const updateResult = async (gameId: string, result: 'win' | 'loss' | 'conceded', games: Array<{ id: string; result?: string | null }>): Promise<UpdateResultOutcome> => {
+  const updateResult = async (
+    gameId: string,
+    result: 'win' | 'loss',
+    games: Array<{ id: string; result?: string | null; decisionType?: SeasonGameDecisionType | null }>,
+    options?: UpdateResultOptions,
+  ): Promise<UpdateResultOutcome> => {
     try {
       const current = games.find((g) => g.id === gameId)
       if (!current) return { ok: false, error: 'Match not found' }
-      const payload: Record<string, unknown> = { result, updatedAt: serverTimestamp() }
-      if (result === 'conceded') {
+      const decisionType: SeasonGameDecisionType = options?.decisionType ?? 'played'
+      const payload: Record<string, unknown> = { result, decisionType, updatedAt: serverTimestamp() }
+      if (decisionType === 'concededByUs' || decisionType === 'concededByOpponent') {
         payload.playerStats = []
         payload.players = []
         payload.playerIds = []
