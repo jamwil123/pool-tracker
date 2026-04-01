@@ -111,6 +111,10 @@ const GamePage = () => {
   const { options: profileOptions } = useUserProfilesOptions()
   useEffect(() => { setPlayerOptions(profileOptions) }, [profileOptions])
 
+  useEffect(() => {
+    if (game?.result === 'conceded' && showEditorModal) setShowEditorModal(false)
+  }, [game?.result, showEditorModal])
+
   const updateRow = (rowId: string, updates: Partial<PlayerStatRow>) =>
     setRows((prev) => prev.map((r) => (r.rowId === rowId ? { ...r, ...updates } : r)))
 
@@ -270,6 +274,8 @@ const GamePage = () => {
     <main className="container"><p>{gameLoading ? 'Loading match…' : 'Match not found.'}</p></main>
   )
 
+  const isConceded = game.result === 'conceded'
+
   return (
     <main className="container">
       <section className="panel">
@@ -322,6 +328,11 @@ const GamePage = () => {
                 <Box mt={2}>
                   <Text color="gray.700">Date: {formatMatchDateLabel(game.matchDate, game.notes, 'TBC')}</Text>
                   <Text color="gray.700">Location: {game.location || 'TBC'}</Text>
+                  {isConceded ? (
+                    <Text color="orange.700" fontWeight={600} mt={2}>
+                      Match conceded — player stats and subs are omitted from totals.
+                    </Text>
+                  ) : null}
                 </Box>
               </>
             )
@@ -351,7 +362,7 @@ const GamePage = () => {
           <article className="card">
             <header className="card-header">
               <h3>Player Results</h3>
-              {canManage ? (
+              {canManage && !isConceded ? (
                 <button
                   type="button"
                   className="secondary-button"
@@ -363,6 +374,7 @@ const GamePage = () => {
               ) : null}
             </header>
             <PlayerStatsSummary stats={game.playerStats || []} canManage={canManage} myUid={myUid} myProfileId={myProfileId} />
+            {isConceded ? <Text color="gray.600" fontSize="sm" mt={2}>This fixture was conceded, so no individual stats are required.</Text> : null}
           </article>
 
           {/* My Match Breakdown chart with mode toggle */}

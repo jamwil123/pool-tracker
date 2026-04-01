@@ -6,16 +6,24 @@ import { isManagerRole, type UserProfileDocument } from '../types/models'
 import useStandings from '../hooks/useStandings'
 import { Box, Heading, Text, SimpleGrid, HStack, Button } from '@chakra-ui/react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts'
+import { countsTowardsStats, isConcededResult } from '../utils/games'
 
 type ProfileRow = (UserProfileDocument & { id: string })
 type GameStat = { playerId: string; singlesWins: number; singlesLosses: number; doublesWins: number; doublesLosses: number; subsPaid?: boolean }
+type DashboardGame = { id: string; opponent: string; result: 'win' | 'loss' | 'pending' | 'conceded'; matchDate?: Date | null; homeOrAway?: 'home' | 'away'; playerIds: string[]; stats: GameStat[] }
+
+const hasGameHappenedForStats = (game: DashboardGame, now: number) => {
+  if (isConcededResult(game.result)) return false
+  if (countsTowardsStats(game.result)) return true
+  return game.matchDate ? game.matchDate.getTime() < now : false
+}
 
 const CaptainsDashboard = () => {
   const { profile } = useAuth()
   const [profiles, setProfiles] = useState<ProfileRow[]>([])
   const [rosterEmails, setRosterEmails] = useState<Map<string, string>>(new Map())
   const standings = useStandings()
-  const [games, setGames] = useState<Array<{ id: string; opponent: string; result: 'win' | 'loss' | 'pending'; matchDate?: Date | null; homeOrAway?: 'home' | 'away'; playerIds: string[]; stats: GameStat[] }>>([])
+  const [games, setGames] = useState<DashboardGame[]>([])
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>('')
   const [recentWindow, setRecentWindow] = useState<number>(3)
   // Add Profile (captain only)
@@ -54,7 +62,10 @@ const CaptainsDashboard = () => {
     const unsub = onSnapshot(collection(db, 'games'), (snap) => {
       const rows = snap.docs.map((d) => {
         const data = d.data() as any
-        const r: 'win' | 'loss' | 'pending' = data?.result === 'win' || data?.result === 'loss' ? data.result : 'pending'
+        const r: DashboardGame['result'] =
+          data?.result === 'win' || data?.result === 'loss' ? data.result :
+          data?.result === 'conceded' ? 'conceded' :
+          'pending'
         const md = data?.matchDate && typeof data.matchDate.toDate === 'function' ? data.matchDate.toDate() as Date : null
         const ho: 'home' | 'away' = data?.homeOrAway === 'away' ? 'away' : 'home'
         const pids: string[] = Array.isArray(data?.playerIds) && data.playerIds.length
@@ -82,7 +93,7 @@ const CaptainsDashboard = () => {
   const topFrameWins = useMemo(() => {
     // Count only games that have happened; sum singlesWins + doublesWins per player
     const now = Date.now()
-    const happened = (g: typeof games[number]) => g.result !== 'pending' || (g.matchDate ? g.matchDate.getTime() < now : false)
+    const happened = (g: DashboardGame) => hasGameHappenedForStats(g, now)
     const map = new Map<string, number>()
     for (const g of games) {
       if (!happened(g)) continue
@@ -109,19 +120,20 @@ const CaptainsDashboard = () => {
   }, [profiles])
 
   const gameResults = useMemo(() => {
-    let wins = 0, losses = 0, pending = 0
+    let wins = 0, losses = 0, pending = 0, conceded = 0
     for (const g of games) {
       if (g.result === 'win') wins++
       else if (g.result === 'loss') losses++
+      else if (g.result === 'conceded') conceded++
       else pending++
     }
-    return { wins, losses, pending }
+    return { wins, losses, pending, conceded }
   }, [games])
 
   const perPlayerMatchForm = useMemo(() => {
-    // Only count games that have happened: result decided OR date in past
+    // Only count games that have happened: result decided OR date in past (excluding concessions)
     const now = Date.now()
-    const happened = (g: typeof games[number]) => g.result !== 'pending' || (g.matchDate ? g.matchDate.getTime() < now : false)
+    const happened = (g: DashboardGame) => hasGameHappenedForStats(g, now)
     const totalHappened = games.filter(happened).length
     const map = new Map<string, { played: number; framesWon: number; framesLost: number }>()
     for (const g of games) {
@@ -148,7 +160,7 @@ const CaptainsDashboard = () => {
 
   const unpaidSubs = useMemo(() => {
     const now = Date.now()
-    const happened = (g: typeof games[number]) => g.result !== 'pending' || (g.matchDate ? g.matchDate.getTime() < now : false)
+    const happened = (g: DashboardGame) => hasGameHappenedForStats(g, now)
     const list: Array<{ pid: string; name: string; email?: string; gameId: string; opponent: string; date: Date | null; amount: number }> = []
     for (const g of games) {
       if (!happened(g)) continue
@@ -172,7 +184,7 @@ const CaptainsDashboard = () => {
   // Team means across finished games
   const teamMeans = useMemo(() => {
     const now = Date.now()
-    const happened = (g: typeof games[number]) => g.result !== 'pending' || (g.matchDate ? g.matchDate.getTime() < now : false)
+    const happened = (g: DashboardGame) => hasGameHappenedForStats(g, now)
     const finished = games.filter(happened)
     const n = finished.length
     if (n === 0) return { avgFramesWon: 0, avgFramesLost: 0, avgPlayers: 0, matchWinRate: 0, avgUniqueFramesWon: 0, avgUniqueFramesLost: 0 }
@@ -220,7 +232,7 @@ const CaptainsDashboard = () => {
   // Per-player means across finished games (only players with at least 1 frame)
   const playerMeans = useMemo(() => {
     const now = Date.now()
-    const happened = (g: typeof games[number]) => g.result !== 'pending' || (g.matchDate ? g.matchDate.getTime() < now : false)
+    const happened = (g: DashboardGame) => hasGameHappenedForStats(g, now)
     const finished = games.filter(happened)
     const per = new Map<string, { w: number; l: number }>()
     for (const g of finished) {
@@ -252,7 +264,7 @@ const CaptainsDashboard = () => {
   // Selection suggestions based on last N finished matches
   const selectionSuggestions = useMemo(() => {
     const now = Date.now()
-    const happened = (g: typeof games[number]) => g.result !== 'pending' || (g.matchDate ? g.matchDate.getTime() < now : false)
+    const happened = (g: DashboardGame) => hasGameHappenedForStats(g, now)
     const finished = games.filter(happened)
     const sorted = [...finished].sort((a, b) => (a.matchDate?.getTime() || 0) - (b.matchDate?.getTime() || 0))
     const lastN = sorted.slice(-Math.max(2, Math.min(3, recentWindow)))
@@ -308,7 +320,7 @@ const CaptainsDashboard = () => {
     const TOTAL_GAMES = 18
     // Count our happened games using the local schedule (team-only collection)
     const now = Date.now()
-    const happened = (g: typeof games[number]) => g.result !== 'pending' || (g.matchDate ? g.matchDate.getTime() < now : false)
+    const happened = (g: DashboardGame) => hasGameHappenedForStats(g, now)
     const ourHappened = games.filter(happened).length
     const remaining = Math.max(0, TOTAL_GAMES - ourHappened)
     const ourPoints = pts(us.points)
@@ -472,16 +484,18 @@ const CaptainsDashboard = () => {
                     { name: 'Wins', value: gameResults.wins },
                     { name: 'Losses', value: gameResults.losses },
                     { name: 'Pending', value: gameResults.pending },
+                    { name: 'Conceded', value: gameResults.conceded },
                   ]} innerRadius={50} outerRadius={70}>
                     <Cell fill="#16a34a" />
                     <Cell fill="#ef4444" />
                     <Cell fill="#9ca3af" />
+                    <Cell fill="#f97316" />
                   </Pie>
                   <Tooltip />
                 </PieChart>
               </ResponsiveContainer>
             </Box>
-            <Text color="gray.600" mt={2}>From games collection: W {gameResults.wins} · L {gameResults.losses} · Pending {gameResults.pending}</Text>
+            <Text color="gray.600" mt={2}>From games collection: W {gameResults.wins} · L {gameResults.losses} · Pending {gameResults.pending} · Conceded {gameResults.conceded}</Text>
           </Box>
 
           <Box borderWidth="1px" borderRadius="lg" p={5} bg="white">
@@ -569,7 +583,7 @@ const CaptainsDashboard = () => {
           <Heading as="h3" size="md" mb={2}>Team Averages</Heading>
           {(() => {
             const now = Date.now()
-            const finishedCount = games.filter((g) => g.result !== 'pending' || (g.matchDate ? g.matchDate.getTime() < now : false)).length
+            const finishedCount = games.filter((g) => hasGameHappenedForStats(g, now)).length
             if (finishedCount === 0) {
               return <Text color="gray.600">No finished games to calculate means yet.</Text>
             }
@@ -691,7 +705,7 @@ const CaptainsDashboard = () => {
             const pid = selectedPlayerId
             if (!pid) return <Text color="gray.600">Pick a player to view detailed stats.</Text>
             const now = Date.now()
-            const happened = (g: typeof games[number]) => g.result !== 'pending' || (g.matchDate ? g.matchDate.getTime() < now : false)
+            const happened = (g: DashboardGame) => hasGameHappenedForStats(g, now)
             const finished = games.filter(happened)
             const played = finished.filter((g) => g.stats.some((s) => s.playerId === pid))
             const finishedCount = finished.length
@@ -700,7 +714,7 @@ const CaptainsDashboard = () => {
             let teamWinsWith = 0, teamLossWith = 0
             let homeW = 0, homeL = 0, awayW = 0, awayL = 0
             let subsDue = 0
-            const perMatch: Array<{ id: string; date: Date | null; opponent: string; homeOrAway: 'home' | 'away'; sw: number; sl: number; dw: number; dl: number; team: 'win' | 'loss' | 'pending'; subs: boolean }>
+            const perMatch: Array<{ id: string; date: Date | null; opponent: string; homeOrAway: 'home' | 'away'; sw: number; sl: number; dw: number; dl: number; team: 'win' | 'loss' | 'pending' | 'conceded'; subs: boolean }>
               = []
             for (const g of played) {
               const stat = g.stats.find((s) => s.playerId === pid)

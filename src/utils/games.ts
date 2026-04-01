@@ -2,13 +2,18 @@ import { Timestamp } from 'firebase/firestore'
 
 export type MatchFilter = 'upcoming' | 'previous'
 
+export const isWinLossResult = (result: any): result is 'win' | 'loss' => result === 'win' || result === 'loss'
+export const isConcededResult = (result: any): result is 'conceded' => result === 'conceded'
+export const isFinishedResult = (result: any): boolean => isWinLossResult(result) || isConcededResult(result)
+export const countsTowardsStats = (result: any): result is 'win' | 'loss' => isWinLossResult(result)
+
 export const toMillis = (matchDate: any): number | null =>
   matchDate instanceof Timestamp ? matchDate.toMillis() : matchDate instanceof Date ? matchDate.getTime() : null
 
 // Keep pending games in Upcoming through the entire match day; otherwise decided games are Previous
 export const classifyMatch = (game: { matchDate?: any; result?: string | null }): MatchFilter => {
   const result = game.result
-  if (result === 'win' || result === 'loss') return 'previous'
+  if (isFinishedResult(result)) return 'previous'
 
   const dt = game.matchDate instanceof Timestamp ? game.matchDate.toDate() : game.matchDate instanceof Date ? game.matchDate : null
   if (!dt) return 'upcoming'
@@ -47,4 +52,3 @@ export const sortByPrevious = <T extends { matchDate?: any; updatedAt?: any }>(r
 }
 
 export default classifyMatch
-

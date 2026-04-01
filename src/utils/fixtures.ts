@@ -28,7 +28,7 @@ export const normalizeImportGame = (
   const notes = typeof row.notes === 'string' && row.notes.trim().length ? row.notes.trim() : null
   const players = Array.isArray(row.players) ? row.players : []
   const playerStats = Array.isArray(row.playerStats) ? row.playerStats : []
-  const result = row.result === 'win' || row.result === 'loss' ? row.result : 'pending'
+  const result = row.result === 'win' || row.result === 'loss' || row.result === 'conceded' ? row.result : 'pending'
   const matchDate = row.matchDate ? parseYyyyMmDdToTimestamp20(row.matchDate as any) : parseYyyyMmDdToTimestamp20(notes as any)
   return { opponent, matchDate, location, homeOrAway, players, playerStats, result, notes }
 }
@@ -43,4 +43,3 @@ export const buildStableMatchId = (g: Omit<SeasonGameDocument, 'createdAt' | 'up
 }
 
 export default normalizeImportGame
-

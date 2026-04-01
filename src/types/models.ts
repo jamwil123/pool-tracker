@@ -62,7 +62,7 @@ export type SeasonGameDocument = {
   homeOrAway: 'home' | 'away'
   players: string[]
   playerStats: SeasonGamePlayerStat[]
-  result: 'win' | 'loss' | 'pending'
+  result: 'win' | 'loss' | 'pending' | 'conceded'
   notes: string | null
   createdAt: Timestamp | FieldValue | null
   updatedAt?: Timestamp | FieldValue | null

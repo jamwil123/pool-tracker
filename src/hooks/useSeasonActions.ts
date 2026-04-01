@@ -6,11 +6,17 @@ import { buildStableMatchId, normalizeImportGame } from '../utils/fixtures'
 export type UpdateResultOutcome = { ok: true } | { ok: false; error: string }
 
 const useSeasonActions = () => {
-  const updateResult = async (gameId: string, result: 'win' | 'loss', games: Array<{ id: string; result?: string | null }>): Promise<UpdateResultOutcome> => {
+  const updateResult = async (gameId: string, result: 'win' | 'loss' | 'conceded', games: Array<{ id: string; result?: string | null }>): Promise<UpdateResultOutcome> => {
     try {
       const current = games.find((g) => g.id === gameId)
       if (!current) return { ok: false, error: 'Match not found' }
-      await updateDoc(doc(db, 'games', gameId), { result, updatedAt: serverTimestamp() })
+      const payload: Record<string, unknown> = { result, updatedAt: serverTimestamp() }
+      if (result === 'conceded') {
+        payload.playerStats = []
+        payload.players = []
+        payload.playerIds = []
+      }
+      await updateDoc(doc(db, 'games', gameId), payload)
       return { ok: true }
     } catch (e) {
       console.error('Failed to update match result', e)

@@ -269,10 +269,14 @@ const SeasonManager = () => {
   };
 
   const { updateResult, importFixtures, savePlayerStats } = useSeasonActions()
-  const handleUpdateResult = async (gameId: string, result: 'win' | 'loss') => {
+  const handleUpdateResult = async (gameId: string, result: 'win' | 'loss' | 'conceded') => {
     if (!canManageGames) return
     const out = await updateResult(gameId, result, games)
     if (!out.ok) setError(out.error)
+    else if (result === 'conceded' && activeMatchId === gameId) {
+      setActiveMatchId(null)
+      setRows([])
+    }
   }
 
   const handleFormChange =
@@ -561,6 +565,9 @@ const SeasonManager = () => {
             {game.notes ? <p>{game.notes}</p> : null}
 
             <PlayerStatsSummary stats={game.playerStats} canManage={canManageGames} />
+            {game.result === 'conceded' ? (
+              <p className="hint" style={{ marginTop: 8 }}>This match was conceded, so player stats and subs are optional.</p>
+            ) : null}
 
             {canManageGames ? (
               <>
@@ -577,35 +584,47 @@ const SeasonManager = () => {
                   >
                     Mark Loss
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateResult(game.id, "conceded")}
+                  >
+                    Mark Conceded
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleToggleStatsPanel(game)}
-                  className="secondary-button"
-                  disabled={playerOptions.length === 0}
-                >
-                  {playerOptions.length === 0
-                    ? "Add players to record results"
-                    : activeMatchId === game.id
-                    ? "Close Player Results"
-                    : "Record Player Results"}
-                </button>
-                {activeMatchId === game.id ? (
-                  <PlayerStatsEditor
-                    rows={rows as any}
-                    playerOptions={playerOptions}
-                    getPlayerSelectHandler={handlePlayerSelect}
-                    getStatInputHandler={handleStatInput as any}
-                    onAddRow={addRow}
-                    onRemoveRow={removeRow}
-                    onSubmit={(e) => handleSavePlayerStats(e as any, game)}
-                    onCancel={() => { setActiveMatchId(null); setRows([]) }}
-                    submitting={statsSubmitting}
-                    canAdd={playerOptions.length > 0}
-                    MAX_SINGLES={MAX_SINGLES}
-                    MAX_DOUBLES={MAX_DOUBLES}
-                  />
-                ) : null}
+                {game.result === 'conceded' ? (
+                  <p className="hint">Player results are disabled for conceded fixtures.</p>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleStatsPanel(game)}
+                      className="secondary-button"
+                      disabled={playerOptions.length === 0}
+                    >
+                      {playerOptions.length === 0
+                        ? "Add players to record results"
+                        : activeMatchId === game.id
+                        ? "Close Player Results"
+                        : "Record Player Results"}
+                    </button>
+                    {activeMatchId === game.id ? (
+                      <PlayerStatsEditor
+                        rows={rows as any}
+                        playerOptions={playerOptions}
+                        getPlayerSelectHandler={handlePlayerSelect}
+                        getStatInputHandler={handleStatInput as any}
+                        onAddRow={addRow}
+                        onRemoveRow={removeRow}
+                        onSubmit={(e) => handleSavePlayerStats(e as any, game)}
+                        onCancel={() => { setActiveMatchId(null); setRows([]) }}
+                        submitting={statsSubmitting}
+                        canAdd={playerOptions.length > 0}
+                        MAX_SINGLES={MAX_SINGLES}
+                        MAX_DOUBLES={MAX_DOUBLES}
+                      />
+                    ) : null}
+                  </>
+                )}
               </>
             ) : null}
           </article>

@@ -10,6 +10,7 @@ import { Box, Heading, Text, HStack, Button, SimpleGrid, Input } from '@chakra-u
 import formatMatchDateLabel from '../utils/date'
 import usePersistentState from '../hooks/usePersistentState'
 import useGames from '../hooks/useGames'
+import useSeasonActions from '../hooks/useSeasonActions'
 import { classifyMatch, sortByPrevious } from '../utils/games'
 import { TEAM_NAME } from '../config/app'
 import MatchCard from '../components/MatchCard'
@@ -26,6 +27,7 @@ const defaultFormState: MatchFormState = { opponent: '', matchDate: '', location
 const GamesList = () => {
   const { profile } = useAuth()
   const { games, error: loadError } = useGames()
+  const { updateResult } = useSeasonActions()
   const [filter, setFilter] = usePersistentState<MatchFilter>('gamesTab', 'upcoming')
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -153,16 +155,11 @@ const GamesList = () => {
     }
   }
 
-  const setResult = async (id: string, result: 'win' | 'loss') => {
+  const setResult = async (id: string, result: 'win' | 'loss' | 'conceded') => {
     if (!canManage) return
-    try {
-      const current = games.find((g) => g.id === id)
-      if (!current) throw new Error('Match not found')
-      await updateDoc(doc(db, 'games', id), { result, updatedAt: serverTimestamp() })
-    } catch (e) {
-      console.error(e)
-      setError('Could not update match result.')
-    }
+    setError(null)
+    const out = await updateResult(id, result, games)
+    if (!out.ok) setError(out.error)
   }
 
   
@@ -260,6 +257,7 @@ const GamesList = () => {
                   isEditing={editingId === g.id}
                   onMarkWin={() => setResult(g.id, 'win')}
                   onMarkLoss={() => setResult(g.id, 'loss')}
+                  onMarkConceded={() => setResult(g.id, 'conceded')}
                   onEdit={() => openEdit(g)}
                   onDelete={() => deleteMatch(g.id)}
                 />

@@ -52,7 +52,7 @@ This codebase now follows a light separation of concerns:
   - `useUserProfileByUid` — resolves the profile auto‑id for the signed‑in user.
   - `useUserProfilesOptions` — loads `{ id, displayName }` options for selects.
   - `useSeasonActions` — business actions for season logic:
-    - `updateResult(gameId, 'win' | 'loss', games)` — applies season cap check and updates Firestore.
+    - `updateResult(gameId, 'win' | 'loss' | 'conceded', games)` — updates Firestore and clears player stats when a match is conceded.
     - `importFixtures(jsonText)` — normalises input, builds stable IDs, creates docs.
     - `savePlayerStats(gameId, rows, playerOptions)` — transactional update of `games.playerStats` and user profile totals.
   - `usePersistentState` — tiny `localStorage` state helper.

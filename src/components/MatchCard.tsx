@@ -14,11 +14,12 @@ type Props = {
   isEditing: boolean
   onMarkWin: () => void
   onMarkLoss: () => void
+  onMarkConceded: () => void
   onEdit: () => void
   onDelete: () => void
 }
 
-const MatchCard = ({ game, dateLabel, canManage, canSetResult, deleting, isEditing, onMarkWin, onMarkLoss, onEdit, onDelete }: Props) => {
+const MatchCard = ({ game, dateLabel, canManage, canSetResult, deleting, isEditing, onMarkWin, onMarkLoss, onMarkConceded, onEdit, onDelete }: Props) => {
   return (
     <Box
       borderWidth="1px"
@@ -57,6 +58,15 @@ const MatchCard = ({ game, dateLabel, canManage, canSetResult, deleting, isEditi
             title={canSetResult ? '' : 'Results can be set on or after match day'}
           >
             Mark Loss
+          </Button>
+          <Button
+            size={{ base: 'xs', sm: 'sm' }}
+            colorScheme="orange"
+            variant="outline"
+            onClick={(e) => { e.preventDefault(); onMarkConceded() }}
+            title="Conceded matches stay on the schedule but don’t count toward stats"
+          >
+            Mark Conceded
           </Button>
           <Button size={{ base: 'xs', sm: 'sm' }} variant="ghost" onClick={(e) => { e.preventDefault(); onEdit() }}>{isEditing ? 'Close' : 'Edit'}</Button>
           <Button
