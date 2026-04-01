@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, query, runTransaction, serverTimestamp, setDoc, updateDoc, where, increment } from 'firebase/firestore'
+import { collection, doc, getDoc, runTransaction, serverTimestamp, setDoc, updateDoc, increment } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import type { SeasonGameDocument, SeasonGamePlayerStat } from '../types/models'
 import { buildStableMatchId, normalizeImportGame } from '../utils/fixtures'
@@ -10,12 +10,6 @@ const useSeasonActions = () => {
     try {
       const current = games.find((g) => g.id === gameId)
       if (!current) return { ok: false, error: 'Match not found' }
-      if (current.result === 'pending') {
-        const decidedSnap = await getDocs(query(collection(db, 'games'), where('result', 'in', ['win', 'loss'])))
-        if (decidedSnap.size >= 13) {
-          return { ok: false, error: 'Season cap reached: 13 results already recorded.' }
-        }
-      }
       await updateDoc(doc(db, 'games', gameId), { result, updatedAt: serverTimestamp() })
       return { ok: true }
     } catch (e) {

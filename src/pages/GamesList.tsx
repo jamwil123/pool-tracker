@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Timestamp, addDoc, collection, doc, serverTimestamp, updateDoc, getDocs, where, deleteDoc, query } from 'firebase/firestore'
+import { Timestamp, addDoc, collection, doc, serverTimestamp, updateDoc, deleteDoc } from 'firebase/firestore'
 import type { ChangeEvent, FormEvent } from 'react'
 import { Link as RouterLink } from 'react-router-dom'
 import { db } from '../firebase/config'
@@ -158,13 +158,6 @@ const GamesList = () => {
     try {
       const current = games.find((g) => g.id === id)
       if (!current) throw new Error('Match not found')
-      if (current.result === 'pending') {
-        const decidedSnap = await getDocs(query(collection(db, 'games'), where('result', 'in', ['win', 'loss'])))
-        if (decidedSnap.size >= 13) {
-          setError('Season cap reached: 13 results already recorded.')
-          return
-        }
-      }
       await updateDoc(doc(db, 'games', id), { result, updatedAt: serverTimestamp() })
     } catch (e) {
       console.error(e)
